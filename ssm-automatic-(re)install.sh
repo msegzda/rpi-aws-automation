@@ -1,6 +1,7 @@
+# default parameters values
+aws_region="eu-central-1"
 
 # parameters
-
 while getopts a:s:r:k: option
 do
 case "${option}"
