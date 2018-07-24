@@ -8,40 +8,17 @@ while getopts a:s:r:k: option
 do
 case "${option}"
 in
-    a) aws_access_key_id=${OPTARG};;
-    s) aws_secret_access_key=${OPTARG};;
-    r) aws_region=${OPTARG};;
+    h) sethost=${OPTARG};;
     k) ssh_pub=${OPTARG};;
 esac
 done
 
 # do the work
+# TODO set hostname if "sethost" variable is set
 
 echo "Installing AWSCLI..."
 pip install awscli
-echo "Setting up ~/.aws/ credentials"
-mkdir -p ~/.aws
-(
-    echo "[default]"
-    echo "aws_access_key_id = $aws_access_key_id"
-    echo "aws_secret_access_key = $aws_secret_access_key"
-) > ~/.aws/credentials
-(
-    echo "[default]"
-    echo "region = $aws_region"
-    echo "output = json"
-) > ~/.aws/config
 
-#TODO: install awslogs automatically
-echo "Setting up 'awslogs' credentials"
-(
-    echo "[plugins]"
-    echo "cwlogs = cwlogs"
-    echo "[default]"
-    echo "region = $aws_region"
-    echo "aws_access_key_id = $aws_access_key_id"
-    echo "aws_secret_access_key = $aws_secret_access_key"
-) > /var/awslogs/etc/aws.conf
 service awslogs restart
 service awslogs status
 tail -n 20 /var/log/awslogs.log
@@ -60,3 +37,6 @@ fi
 service ssh restart
 service ssh status
 cat /etc/ssh/sshd_config | grep -i "root"
+
+# reboot in one minute
+shutdown -r +1
