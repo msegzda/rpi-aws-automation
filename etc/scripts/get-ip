@@ -1,0 +1,34 @@
+#!/bin/bash
+
+privateIP=$(/bin/hostname -I | xargs) # xargs there "trims" the returned string
+publicIP=$(/usr/bin/curl -s --max-time 5 http://ipecho.net/plain || /usr/bin/curl -s --max-time 5 https://api.ipify.org/ | xargs)
+publicIP_previous=$(/bin/cat /tmp/captures/ip.public)
+pubNew=0
+
+# display local and public IP address of system
+
+if [ ! -d /tmp/captures ]; then
+    echo "Creating /tmp/captures directory"
+    mkdir -v -p /tmp/captures
+    chmod -v 777 /tmp/captures
+fi
+
+if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
+    # check if public IP changed from previous test
+    if [ "${publicIP}" != "${publicIP_previous}" ]; then
+        aws route53 change-resource-record-sets --hosted-zone-id $1 --change-batch '{"Comment":"Updated by get-ip automatically","Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"'"$2."'","Type":"A","TTL":1000,"ResourceRecords":[{"Value":"'"${publicIP}"'"}]}}]}'
+        if [ $? -ne 0 ]; then
+            logger -t get-ip "[ERROR] Could not set public IP address on $2! aws route53 returned exit code $?"
+        else
+            pubNew=1
+            echo ${publicIP} > /tmp/captures/ip.public
+        fi
+    fi
+
+    echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\",\"pubNew\":${pubNew}}" > /tmp/captures/ip.json
+    echo "File /tmp/captures/ip.json written. Content:"
+    /bin/cat /tmp/captures/ip.json
+    /bin/cat /tmp/captures/ip.json | logger -t get-ip
+else
+    logger -t get-ip "[WARN] Could not determine private or public IP address!"
+fi
