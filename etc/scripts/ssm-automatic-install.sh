@@ -22,10 +22,10 @@ done
 # TODO set hostname if "sethost" variable is set
 
 echo "Installing AWSCLI..."
-pip install awscli --upgrade
+pip2 install awscli --upgrade
 
 echo "Installing AWSLOGS..."
-pip install awslogs --upgrade
+pip2 install awslogs --upgrade
 service awslogs restart
 service awslogs status
 
@@ -46,8 +46,11 @@ cat /etc/ssh/sshd_config | grep -i "root"
 # install some scheduled jobs
 crontab -r
 (
+    echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
+    echo "HOME=/root"; \
     echo "@hourly /etc/scripts/get-ip $route53zoneId $route53domain &> /dev/null"; \
-    echo "0 */4 * * * service amazon-ssm-agent restart"
+    echo "0 */4 * * * /etc/scripts/reload-aws-credentials &> /dev/null"; \
+    echo "*/2 * * * * /etc/scripts/capture-image cam1 &> /dev/null"
 ) | crontab -
 crontab -l
 
