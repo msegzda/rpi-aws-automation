@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# set this to your own location
+lat=54.822745
+lon=24.972057
+
+TMPLOCAL="/tmp/captures"
+if [ ! -d $TMPLOCAL ]; then
+    mkdir -v -p $TMPLOCAL
+    chmod -v 777 $TMPLOCAL
+fi
+OUTFILE="$TMPLOCAL/sunrise-sunset-today.json"
+
+curl -m 10 -s "https://api.sunrise-sunset.org/json?lat=$lat&lng=$lon&date=today&formatted=0" -o $OUTFILE
+
+if [ $? -eq 0 ]; then
+    echo "$OUTFILE written"
+fi
+
+cat $OUTFILE | logger -t sunrise-sunset-today
