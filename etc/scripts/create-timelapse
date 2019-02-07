@@ -1,0 +1,46 @@
+#!/bin/bash
+
+CAM=${1,,} # always lower case ($1 param)
+ALLJPEGS=$2
+RETRYFILE=$3
+LAPSEFILE=$CAM"_$(date +%Y%m%d).mp4"
+LAPSEDIR="/var/captures/dailytimelapses"
+
+if [ -z "$CAM" ]; then
+    echo "[ERR] Please specify \$1 parameter. Typically this is 'cam1'"
+    exit
+fi
+
+# delete empty dir
+find $ALLJPEGS -type d -empty -delete
+
+if [ -z "$ALLJPEGS" ] || [ ! -d $ALLJPEGS ]; then
+    echo "[ERR] Please specify \$2 parameter with full path where *.jpg files resides. Directory must be not empty."
+    exit
+fi
+
+if [ ! -d $LAPSEDIR ]; then
+    mkdir -v -p $LAPSEDIR
+fi
+
+if [ -f "$LAPSEDIR/$LAPSEFILE" ]; then
+    echo "[WARN] Timelapse $LAPSEDIR/$LAPSEFILE file already exist"
+    exit
+fi
+
+# if we are here we are good to make a timelapse!
+logger -i -t create-timelapse "> /etc/scripts/create-timelapse $CAM $ALLJPEGS"
+
+ffmpeg -r 24 -pattern_type glob -i "$ALLJPEGS/*.jpg" \
+    -s hd1080 -vcodec libx264 "$LAPSEDIR/$LAPSEFILE"
+
+if [ $? -eq 0 ]; then
+    logger -i -t create-timelapse "DONE: $LAPSEDIR/$LAPSEFILE"
+    # if no $RETRYFILE we are good to wipe the dir!
+    if [ ! -z "$RETRYFILE" ] && [ ! -f $RETRYFILE ]; then
+        rm -fv "$ALLJPEGS/*.jpg" 2>&1 | logger -i -t create-timelapse
+    fi
+else
+    logger -i -t create-timelapse "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"
+    rm -fv "$LAPSEDIR/$LAPSEFILE" 2>&1 | logger -i -t create-timelapse
+fi

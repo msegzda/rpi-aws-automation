@@ -4,7 +4,7 @@
 lat=54.822745
 lon=24.972057
 
-TMPLOCAL="/tmp/captures"
+TMPLOCAL="/var/captures"
 if [ ! -d $TMPLOCAL ]; then
     mkdir -v -p $TMPLOCAL
     chmod -v 777 $TMPLOCAL

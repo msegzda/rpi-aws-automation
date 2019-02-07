@@ -7,13 +7,13 @@ fi
 
 privateIP=$(hostname -I | xargs) # xargs there "trims" the returned string
 publicIP=$(curl -s --max-time 5 http://ipecho.net/plain || curl -s --max-time 5 https://api.ipify.org/ | xargs)
-publicIP_previous=$(cat /tmp/captures/ip.json | jq -r ".pub")
+publicIP_previous=$(cat /var/captures/ip.json | jq -r ".pub")
 pubNew=0
 
-if [ ! -d /tmp/captures ]; then
-    echo "Creating /tmp/captures directory"
-    mkdir -v -p /tmp/captures
-    chmod -v 777 /tmp/captures
+if [ ! -d /var/captures ]; then
+    echo "Creating /var/captures directory"
+    mkdir -v -p /var/captures
+    chmod -v 777 /var/captures
 fi
 
 if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
@@ -26,10 +26,10 @@ if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
             pubNew=1
         fi
     fi
-    echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\",\"pubNew\":${pubNew}}" > /tmp/captures/ip.json
-    echo "File /tmp/captures/ip.json written. Content:"
-    cat /tmp/captures/ip.json
-    cat /tmp/captures/ip.json | logger -t get-ip
+    echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\",\"pubNew\":${pubNew}}" > /var/captures/ip.json
+    echo "File /var/captures/ip.json written. Content:"
+    cat /var/captures/ip.json
+    cat /var/captures/ip.json | logger -t get-ip
 else
     logger -t get-ip "[WARN] Could not determine private or public IP address!"
 fi

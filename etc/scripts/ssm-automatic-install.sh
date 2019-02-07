@@ -18,6 +18,11 @@ done
 # do the work
 # TODO set hostname if "sethost" variable is set
 
+if [ ! -d /var/captures ]; then
+    mkdir -v -p /var/captures
+    chmod -v 777 /var/captures
+fi
+
 # various prerequisites
 apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils
 
@@ -50,12 +55,12 @@ fi
 
 # install some scheduled jobs
 if [ -z "$route53zoneId" ] || [ -z "$route53domain" ]; then
-    echo "[WARN] Parameters 'z' and/or 'd' are not set. Skipping crontab configuration"
+    echo "[WARN] Parameters 'z' or 'd' or environment variables \$HOME or \$PATH are not set. Skipping crontab configuration"
 else
     crontab -r
     (
-        echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
-        echo "HOME=/root"; \
+        echo "PATH=$PATH"; \
+        echo "HOME=$HOME"; \
         echo "@daily /etc/scripts/sunset-sunrise-today &> /dev/null"; \
         echo "@hourly /etc/scripts/get-ip $route53zoneId $route53domain &> /dev/null"; \
         echo "55 */1 * * * /etc/scripts/reload-aws-credentials &> /dev/null"; \
