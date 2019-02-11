@@ -1,35 +1,35 @@
 #!/bin/bash
 
+maindir=$(cat /etc/rpi.json | jq -r .maindir)
+
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "[ERR] Parameters \$1 (Route53 Zone ID) and \$2 (DNS A record full name) are required!"
     exit
 fi
 
+if [ ! -d $maindir ]; then
+    mkdir -v -p $maindir
+    chmod -v 777 $maindir
+fi
+
 privateIP=$(hostname -I | xargs) # xargs there "trims" the returned string
 publicIP=$(curl -s --max-time 5 http://ipecho.net/plain || curl -s --max-time 5 https://api.ipify.org/ | xargs)
-publicIP_previous=$(cat /var/captures/ip.json | jq -r ".pub")
-pubNew=0
-
-if [ ! -d /var/captures ]; then
-    echo "Creating /var/captures directory"
-    mkdir -v -p /var/captures
-    chmod -v 777 /var/captures
-fi
+publicIP_previous=$(cat $maindir/ip.json | jq -r ".pub")
 
 if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
     # check if public IP changed from previous test
     if [ "${publicIP}" != "${publicIP_previous}" ]; then
-        aws route53 change-resource-record-sets --hosted-zone-id $1 --change-batch '{"Comment":"Updated by get-ip automatically","Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"'"$2."'","Type":"A","TTL":1000,"ResourceRecords":[{"Value":"'"${publicIP}"'"}]}}]}'
+        aws route53 change-resource-record-sets --hosted-zone-id $1 \
+            --change-batch '{"Comment":"Updated by get-ip automatically","Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"'"$2."'","Type":"A","TTL":1000,"ResourceRecords":[{"Value":"'"${publicIP}"'"}]}}]}' \
+            2>&1 | logger -t get-ip
         if [ $? -ne 0 ]; then
-            logger -t get-ip "[ERROR] Could not set public IP address on $2! aws route53 returned exit code $?"
+            logger -t get-ip "[ERROR] Could not set public IP address on $2! AWS Route53 exit code: $?"
         else
-            pubNew=1
+            echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\"}" > $maindir/ip.json
+            echo "File $maindir/ip.json written"
+            cat $maindir/ip.json | logger -t get-ip
         fi
     fi
-    echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\",\"pubNew\":${pubNew}}" > /var/captures/ip.json
-    echo "File /var/captures/ip.json written. Content:"
-    cat /var/captures/ip.json
-    cat /var/captures/ip.json | logger -t get-ip
 else
     logger -t get-ip "[WARN] Could not determine private or public IP address!"
 fi

@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # set this to your own location
-lat=54.822745
-lon=24.972057
+lat=$(cat /etc/rpi.json | jq -r .lat)
+lon=$(cat /etc/rpi.json | jq -r .lon)
+maindir=$(cat /etc/rpi.json | jq -r .maindir)
 
-TMPLOCAL="/var/captures"
-if [ ! -d $TMPLOCAL ]; then
-    mkdir -v -p $TMPLOCAL
-    chmod -v 777 $TMPLOCAL
+if [ ! -d $maindir ]; then
+    mkdir -v -p $maindir
+    chmod -v 777 $maindir
 fi
-OUTFILE="$TMPLOCAL/sunrise-sunset-today.json"
+OUTFILE="$maindir/sunrise-sunset-today.json"
 
 curl -m 10 -s "https://api.sunrise-sunset.org/json?lat=$lat&lng=$lon&date=today&formatted=0" -o $OUTFILE
 

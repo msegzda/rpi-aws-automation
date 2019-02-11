@@ -4,14 +4,15 @@ CAM=${1,,} # always lower case ($1 param)
 ALLJPEGS=$2
 RETRYFILE=$3
 LAPSEFILE=$CAM"_$(date +%Y%m%d).mp4"
-LAPSEDIR="/var/captures/dailytimelapses"
+LAPSEDIR=$(cat /etc/rpi.json | jq -r .maindir)"/dailytimelapses"
+s3bucket="s3://"$(cat /etc/rpi.json | jq -r .aws.s3)"/dailytimelapses"
 
 if [ -z "$CAM" ]; then
     echo "[ERR] Please specify \$1 parameter. Typically this is 'cam1'"
     exit
 fi
 
-# delete empty dir
+# delete empty dirs
 find $ALLJPEGS -type d -empty -delete
 
 if [ -z "$ALLJPEGS" ] || [ ! -d $ALLJPEGS ]; then
@@ -32,10 +33,16 @@ fi
 logger -i -t create-timelapse "> /etc/scripts/create-timelapse $CAM $ALLJPEGS"
 
 ffmpeg -r 24 -pattern_type glob -i "$ALLJPEGS/*.jpg" \
-    -s hd1080 -vcodec libx264 "$LAPSEDIR/$LAPSEFILE"
+    -s hd1080 -vcodec libx264 "$LAPSEDIR/$LAPSEFILE" -y
 
 if [ $? -eq 0 ]; then
     logger -i -t create-timelapse "DONE: $LAPSEDIR/$LAPSEFILE"
+    # move to S3
+    aws s3 mv $LAPSEDIR/ $s3bucket/ --exclude "*" --include "*.mp4" --recursive \
+        --acl "public-read" 2>&1 | logger -i -t create-timelapse
+    aws s3 cp $s3bucket/$LAPSEFILE $s3bucket/current.mp4 --acl "public-read" \
+        2>&1 | logger -i -t create-timelapse
+
     # if no $RETRYFILE we are good to wipe the dir!
     if [ ! -z "$RETRYFILE" ] && [ ! -f $RETRYFILE ]; then
         rm -fv "$ALLJPEGS/*.jpg" 2>&1 | logger -i -t create-timelapse
