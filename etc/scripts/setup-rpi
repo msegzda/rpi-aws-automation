@@ -10,13 +10,15 @@ aws_r53zoneid=$(cat /etc/rpi.json | jq -r .aws.r53zoneid)
 aws_r53subdomain=$(cat /etc/rpi.json | jq -r .aws.r53subdomain)
 ssh_publickey=$(cat /etc/rpi.json | jq -r .ssh.publickey)
 ssh_keyuser=$(cat /etc/rpi.json | jq -r .ssh.keyuser)
+cam1_takefrequency=$(cat /etc/rpi.json | jq -r .cam1.takefrequency)
 
 # do the lifting
 
-if [ ! -z "$sethostname" ]; then
-    hostname $sethostname
-    # do more stuff here to ensure hostname is set properly
-    #cat "$sethostname" > /etc/hostname
+if [ ! -z "$sethostname" ] && [ "$HOSTNAME" != "$sethostname" ]; then
+    echo "New hostname: $sethostname"
+    hostname "$sethostname"
+    echo "$sethostname" > /etc/hostname
+    echo "127.0.1.1 $sethostname" >> /etc/hosts
 fi
 
 if [ ! -z "$timezone" ]; then
@@ -34,7 +36,6 @@ pip2 install awscli --upgrade
 echo "Installing AWSLOGS..."
 pip2 install awslogs --upgrade
 service awslogs restart
-service awslogs status
 
 if [ -z "$ssh_publickey" ] || [ -z "$ssh_keyuser" ]; then
     echo "[WARN] Conf. parameter 'ssh.publickey' pr 'ssh.keyuser' not set. Skipping SSH public key setting for for root"
@@ -47,13 +48,13 @@ else
     sed -i "s/\#\?PermitRootLogin.*/PermitRootLogin without-password/g" /etc/ssh/sshd_config
     sed -i "s/\#Port 22/Port 22/ig" /etc/ssh/sshd_config
     service ssh restart
-    service ssh status
 fi
 
 # install some scheduled jobs
 if [ -z "$aws_r53zoneid" ] || [ -z "$aws_r53subdomain" ] || [ -z "$HOME" ] || [ -z "$PATH" ]; then
     echo "[WARN] Conf. parameters 'aws.r53zoneid' or 'aws.r53subdomain' or env. variables \$HOME or \$PATH are not set. Skipping crontab configuration!"
 else
+    echo "Crontab file below:"
     crontab -r
     (
         echo "PATH=$PATH"; \
@@ -62,7 +63,7 @@ else
         echo "45 1 * * * shutdown -r"; \
         echo "@hourly /etc/scripts/get-ip $aws_r53zoneid $aws_r53subdomain &> /dev/null"; \
         echo "55 */1 * * * /etc/scripts/reload-aws-credentials &> /dev/null"; \
-        echo "*/2 * * * * /etc/scripts/capture-image cam1 &> /dev/null"
+        echo "$cam1_takefrequency * * * * /etc/scripts/capture-image cam1 &> /dev/null"
     ) | crontab -
     crontab -l
 
