@@ -1,20 +1,21 @@
 #!/bin/bash
 
 # set this to your own location
-lat=$(cat /etc/rpi.json | jq -r .lat)
-lon=$(cat /etc/rpi.json | jq -r .lon)
 maindir=$(cat /etc/rpi.json | jq -r .maindir)
+sunapi=$(cat /etc/rpi.json | jq -r .sun.api)
+out="$maindir/sunrise-sunset-today.json"
 
 if [ ! -d $maindir ]; then
     mkdir -v -p $maindir
     chmod -v 777 $maindir
 fi
-OUTFILE="$maindir/sunrise-sunset-today.json"
 
-curl -m 10 -s "https://api.sunrise-sunset.org/json?lat=$lat&lng=$lon&date=today&formatted=0" -o $OUTFILE
+curl -m 10 -s -f "$sunapi" -o $out
 
 if [ $? -eq 0 ]; then
-    echo "$OUTFILE written"
+    echo "$out written"
+else
+    logger -t sunrise-sunset-today "[WARN] Failed update $out file. CURL exit code: $?"
 fi
 
-cat $OUTFILE | logger -t sunrise-sunset-today
+cat $out | logger -t sunrise-sunset-today

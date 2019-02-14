@@ -11,15 +11,10 @@ aws_r53subdomain=$(cat /etc/rpi.json | jq -r .aws.r53subdomain)
 ssh_publickey=$(cat /etc/rpi.json | jq -r .ssh.publickey)
 ssh_keyuser=$(cat /etc/rpi.json | jq -r .ssh.keyuser)
 cam1_takefrequency=$(cat /etc/rpi.json | jq -r .cam1.takefrequency)
+sun_takefrequency=$(cat /etc/rpi.json | jq -r .sun.takefrequency)
+weather_takefrequency=$(cat /etc/rpi.json | jq -r .weather.takefrequency)
 
 # do the lifting
-
-if [ ! -z "$sethostname" ] && [ "$HOSTNAME" != "$sethostname" ]; then
-    echo "New hostname: $sethostname"
-    hostname "$sethostname"
-    echo "$sethostname" > /etc/hostname
-    echo "127.0.1.1 $sethostname" >> /etc/hosts
-fi
 
 if [ ! -z "$timezone" ]; then
     ln -sfv /usr/share/zoneinfo/$timezone /etc/localtime
@@ -50,6 +45,15 @@ else
     service ssh restart
 fi
 
+if [ ! -z "$sethostname" ] && [ "$HOSTNAME" != "$sethostname" ]; then
+    echo "New hostname: $sethostname"
+    hostname "$sethostname"
+    echo "$sethostname" > /etc/hostname
+    echo "127.0.1.1 $sethostname" >> /etc/hosts
+    # reboot in 2 minutes
+    shutdown -r +2
+fi
+
 # install some scheduled jobs
 if [ -z "$aws_r53zoneid" ] || [ -z "$aws_r53subdomain" ] || [ -z "$HOME" ] || [ -z "$PATH" ]; then
     echo "[WARN] Conf. parameters 'aws.r53zoneid' or 'aws.r53subdomain' or env. variables \$HOME or \$PATH are not set. Skipping crontab configuration!"
@@ -59,11 +63,12 @@ else
     (
         echo "PATH=$PATH"; \
         echo "HOME=$HOME"; \
-        echo "@daily /etc/scripts/sunset-sunrise-today &> /dev/null"; \
+        echo "$sun_takefrequency /etc/scripts/sunset-sunrise-today &> /dev/null"; \
+        echo "$weather_takefrequency /etc/scripts/weather-now &> /dev/null"; \
         echo "45 1 * * * shutdown -r"; \
         echo "@hourly /etc/scripts/get-ip $aws_r53zoneid $aws_r53subdomain &> /dev/null"; \
         echo "55 */1 * * * /etc/scripts/reload-aws-credentials &> /dev/null"; \
-        echo "$cam1_takefrequency * * * * /etc/scripts/capture-image cam1 &> /dev/null"
+        echo "$cam1_takefrequency /etc/scripts/capture-image cam1 &> /dev/null"
     ) | crontab -
     crontab -l
 
@@ -72,6 +77,3 @@ else
     /etc/scripts/get-ip $aws_r53zoneid $aws_r53subdomain
     /etc/scripts/sunset-sunrise-today
 fi
-
-# reboot in one minute
-shutdown -r +1

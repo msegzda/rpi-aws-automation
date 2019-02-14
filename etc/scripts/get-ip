@@ -1,7 +1,7 @@
 #!/bin/bash
 
 maindir=$(cat /etc/rpi.json | jq -r .maindir)
-
+aws_r53ttl=$(cat /etc/rpi.json | jq -r .aws.r53ttl)
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "[ERR] Parameters \$1 (Route53 Zone ID) and \$2 (DNS A record full name) are required!"
     exit
@@ -19,9 +19,13 @@ publicIP_previous=$(cat $maindir/ip.json | jq -r ".pub")
 if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
     # check if public IP changed from previous test
     if [ "${publicIP}" != "${publicIP_previous}" ]; then
+        printf -v changeBatch '{"Comment":"get-ip", \
+            "Changes":[{"Action":"UPSERT","ResourceRecordSet": \
+            {"Name":"%1.","Type":"A","TTL":"%2","ResourceRecords":[{"Value":"%3"}]}}]}' \
+            "$2", "$aws_r53ttl", "$publicIP"
+        logger -t get-ip "Route53: $changeBatch"
         aws route53 change-resource-record-sets --hosted-zone-id $1 \
-            --change-batch '{"Comment":"Updated by get-ip automatically","Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"'"$2."'","Type":"A","TTL":1000,"ResourceRecords":[{"Value":"'"${publicIP}"'"}]}}]}' \
-            2>&1 | logger -t get-ip
+            --change-batch $changeBatch 2>&1 | jq -c . | logger -t get-ip
         if [ $? -ne 0 ]; then
             logger -t get-ip "[ERROR] Could not set public IP address on $2! AWS Route53 exit code: $?"
         else

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# set this to your own location
+maindir=$(cat /etc/rpi.json | jq -r .maindir)
+weatherapi=$(cat /etc/rpi.json | jq -r .weather.api)
+out="$maindir/weather.json"
+
+if [ ! -d $maindir ]; then
+    mkdir -v -p $maindir
+    chmod -v 777 $maindir
+fi
+
+curl -m 10 -s -f "$weatherapi" -o $out
+
+if [ $? -eq 0 ]; then
+    echo "$out written"
+    # todo run jq query here
+else
+    logger -t weather-now "[WARN] Failed update $out file. CURL exit code: $?"
+fi
+
+cat $out | logger -t weather-now
