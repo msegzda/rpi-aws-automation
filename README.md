@@ -16,7 +16,7 @@
     ```
  1. SSH to server and install the following prerequisites:
     ``` bash
-    apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils
+    apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils imagemagick
     ```
 
 ## Install FTP server for cameras ##

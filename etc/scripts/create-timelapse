@@ -1,11 +1,20 @@
 #!/bin/bash
 
+# quick access to this on AWSlOGS:
+# https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#logEventViewer:group=/var/log/messages;filter=%22create-timelapse%22;start=P1D
+
+# dont do anything if process is already running
+if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
+    echo "[WARN] Process of ${0} is already running"
+    exit
+fi
+
+CONFIG=$(cat /etc/rpi.json)
 CAM=${1,,} # always lower case ($1 param)
 ALLJPEGS=$2
 RETRYFILE=$3
 LAPSEFILE=$CAM"_$(date +%Y%m%d).mp4"
-LAPSEDIR=$(cat /etc/rpi.json | jq -r .maindir)"/dailytimelapses"
-s3bucket="s3://"$(cat /etc/rpi.json | jq -r .aws.s3)"/dailytimelapses"
+LAPSEDIR=$(jq -r .maindir <<< $CONFIG)"/dailytimelapses"
 
 if [ -z "$CAM" ]; then
     echo "[ERR] Please specify \$1 parameter. Typically this is 'cam1'"
@@ -29,23 +38,26 @@ if [ -f "$LAPSEDIR/$LAPSEFILE" ]; then
     exit
 fi
 
+if [ -f "/tmp/$LAPSEFILE" ]; then
+    echo "[WARN] Timelapse /tmp/$LAPSEFILE file already exist"
+    exit
+fi
+
 # if we are here we are good to make a timelapse!
 logger -i -t create-timelapse "> /etc/scripts/create-timelapse $CAM $ALLJPEGS"
 
 ffmpeg -r 24 -pattern_type glob -i "$ALLJPEGS/*.jpg" \
-    -s hd1080 -vcodec libx264 "$LAPSEDIR/$LAPSEFILE" -y
+    -s hd1080 -vcodec libx264 "/tmp/$LAPSEFILE" -y
 
 if [ $? -eq 0 ]; then
+    mv -fv "/tmp/$LAPSEFILE" "$LAPSEDIR/$LAPSEFILE" | logger -i -t create-timelapse
     logger -i -t create-timelapse "DONE: $LAPSEDIR/$LAPSEFILE"
-    # move to S3
-    aws s3 mv $LAPSEDIR/ $s3bucket/ --exclude "*" --include "*.mp4" --recursive \
-        --acl "public-read" 2>&1 | logger -i -t create-timelapse
-    aws s3 cp $s3bucket/$LAPSEFILE $s3bucket/current.mp4 --acl "public-read" \
-        2>&1 | logger -i -t create-timelapse
-
+    # will move to S3 with separate script
     # if no $RETRYFILE we are good to wipe the dir!
     if [ ! -z "$RETRYFILE" ] && [ ! -f $RETRYFILE ]; then
         rm -fv "$ALLJPEGS/*.jpg" 2>&1 | logger -i -t create-timelapse
+    else
+        logger -i -t create-timelapse "[WARN] $RETRYFILE contains images not synced to S3."
     fi
 else
     logger -i -t create-timelapse "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"

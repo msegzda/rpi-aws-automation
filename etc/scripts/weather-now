@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# set this to your own location
-maindir=$(cat /etc/rpi.json | jq -r .maindir)
-weatherapi=$(cat /etc/rpi.json | jq -r .weather.api)
+CONFIG=$(cat /etc/rpi.json)
+maindir=$(jq -r .maindir <<< $CONFIG)
+weatherapi=$(jq -r .weather.api <<< $CONFIG)
+jq_query1=$(jq -r .weather.jq_query1 <<< $CONFIG)
+outraw="/tmp/weather-all.json"
 out="$maindir/weather.json"
 
 if [ ! -d $maindir ]; then
@@ -10,13 +12,13 @@ if [ ! -d $maindir ]; then
     chmod -v 777 $maindir
 fi
 
-curl -m 10 -s -f "$weatherapi" -o $out
+curl -m 10 -s -f "$weatherapi" -o $outraw
 
 if [ $? -eq 0 ]; then
     echo "$out written"
     # todo run jq query here
+    jq -rc "$jq_query1" < $outraw > $out
+    logger -t weather-now < $out
 else
     logger -t weather-now "[WARN] Failed update $out file. CURL exit code: $?"
 fi
-
-cat $out | logger -t weather-now

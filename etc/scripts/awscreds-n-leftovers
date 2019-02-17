@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# quick access to this on AWSlOGS:
+# https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#logEventViewer:group=/var/log/messages;filter=%22awscreds-n-leftovers%22;start=PT1H
+
+# dont do anything if process is already running
+if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
+    echo "[WARN] Process of ${0} is already running"
+    exit
+fi
+
+rm -fv /root/.aws/credentials | logger -i -t awscreds-n-leftovers
+service amazon-ssm-agent restart
+service awslogs restart
+logger -i -t awscreds-n-leftovers "Reloaded amazon-ssm-agent and awslogs"
+
+# do some leftovers
+CONFIG=$(cat /etc/rpi.json)
+LAPSEDIR=$(jq -r .maindir <<< $CONFIG)
+s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)
+maindir=$(jq -r .maindir <<< $CONFIG)
+
+# take care of timelapses
+aws s3 mv $LAPSEDIR/dailytimelapses $s3bucket/dailytimelapses --exclude "*" --include "*.mp4" --recursive \
+    --page-size 1 --acl "public-read" 2>&1 | logger -i -t awscreds-n-leftovers
+
+if [ $? -ne 0 ]; then
+    logger -t awscreds-n-leftovers "[WARN] AWSCLI error code: $?"
+fi
+
+# take care of some failed files
+find $maindir -name 'aws*.retry' -exec /etc/scripts/retry-files {} \;
+
+# TODO cleanup from some old temporary files

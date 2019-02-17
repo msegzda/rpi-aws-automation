@@ -1,21 +1,30 @@
 #!/bin/bash
 
+# dont do anything if process is already running
+if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
+    echo "[WARN] Process of ${0} is already running"
+    exit
+fi
+
 FILENAME=`date +%H%M%S`
 DATEDIR=`date +%Y/%m/%d`
 RETRYDATE=`date +%Y%m%d`
 CAM=${1,,} # always lower case ($1 param)
-maindir=$(cat /etc/rpi.json | jq -r .maindir)
+CONFIG=$(cat /etc/rpi.json)
+maindir=$(jq -r .maindir <<< $CONFIG)
 TMPLOCAL="$maindir/$CAM/$DATEDIR"
-SUNFILE="$maindir/sunrise-sunset-today.json"
+SUNFILE=$(cat $maindir/sunrise-sunset-today.json)
+setoffset=$(jq -r .sun.setoffset <<< $CONFIG)
+riseoffset=$(jq -r .sun.riseoffset <<< $CONFIG)
 
 if [ -z "$CAM" ]; then
     echo "ERROR: Please specify \$1 parameter. Typically this is 'cam1'"
     exit
 fi
-RTSP=$(cat /etc/rpi.json | jq -r .$CAM.rtsp)
-s3bucket="s3://"$(cat /etc/rpi.json | jq -r .aws.s3)"/$CAM"
+RTSP=$(jq -r .$CAM.rtsp <<< $CONFIG)
+s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
 
-if [ ! -f $SUNFILE ]; then
+if [ -z "$SUNFILE" ]; then
     /etc/scripts/sunset-sunrise-today
 fi
 
@@ -26,26 +35,25 @@ fi
 
 # in the night do not capture
 # below compares numbers in HHmmss format
-sunrse=`date +"%H%M%S" --date="$(cat $SUNFILE | jq -r .results.sunrise) - 30 minutes"`
-sunset=`date +"%H%M%S" --date="$(cat $SUNFILE | jq -r .results.sunset) + 30 minutes"`
+sunrse=`date +"%H%M%S" --date="$(jq -r .results.sunrise <<< $SUNFILE) $riseoffset"`
+sunset=`date +"%H%M%S" --date="$(jq -r .results.sunset <<< $SUNFILE) $setoffset"`
 NOW=$(date +"%H%M%S")
 
 if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
 
     ffmpeg -rtsp_transport tcp -loglevel fatal -i $RTSP -timeout 30 -vframes 1 -r 1 "$TMPLOCAL/$FILENAME.jpg" \
-        > "$maindir/capture-image.log" 2>&1
-
-    sleep 3 # wait a bit
+        > "/tmp/capture-image.log" 2>&1
 
     if [ $? -eq 0 ]; then
-        # now upload to s3; This also re-uploads anything that failed before
+        sleep 3 # wait a bit
+        # now upload to s3
         # requires S3 PutObject and PutObjectAcl permissions
         aws s3 cp $maindir/$CAM/$DATEDIR/$FILENAME.jpg $s3bucket/$DATEDIR/ \
-            --acl "public-read" >> "$maindir/capture-image.log" 2>&1
+            --acl "public-read" >> "/tmp/capture-image.log" 2>&1
 
         if [ $? -eq 0 ]; then
             aws s3 cp "$s3bucket/$DATEDIR/$FILENAME.jpg" "$s3bucket/current.jpg" \
-                --acl "public-read" >> "$maindir/capture-image.log" 2>&1
+                --acl "public-read" >> "/tmp/capture-image.log" 2>&1
         else
             logger -t capture-image "[WARN] AWSCLI error code: $?"
             echo "aws s3 cp $maindir/$CAM/$DATEDIR/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
@@ -55,7 +63,7 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
     fi
 
     # output to log whats done
-    cat "$maindir/capture-image.log" | logger -t capture-image
+    cat "/tmp/capture-image.log" | logger -t capture-image
 else
     echo "Goodnight"
     /etc/scripts/create-timelapse "$CAM" "$maindir/$CAM/$DATEDIR" "$maindir/aws-s3-cp-$RETRYDATE.retry"
