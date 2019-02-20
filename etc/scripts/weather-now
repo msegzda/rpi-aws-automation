@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# quick access to this on AWSlOGS:
+# https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#logEventViewer:group=/var/log/messages;stream=RPI1;filter=%22weather-now%22;start=PT2H
+
 CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 weatherapi=$(jq -r .weather.api <<< $CONFIG)

@@ -6,7 +6,7 @@ if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
     exit
 fi
 
-FILENAME=`date +%H%M%S`
+FILENAME=`date +%Y%m%d%H%M%S`
 DATEDIR=`date +%Y/%m/%d`
 RETRYDATE=`date +%Y%m%d`
 CAM=${1,,} # always lower case ($1 param)
@@ -41,8 +41,9 @@ NOW=$(date +"%H%M%S")
 
 if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
 
-    ffmpeg -rtsp_transport tcp -loglevel fatal -i $RTSP -timeout 30 -vframes 1 -r 1 "$TMPLOCAL/$FILENAME.jpg" \
-        > "/tmp/capture-image.log" 2>&1
+    ffmpeg -rtsp_transport tcp -loglevel fatal -i $RTSP \
+        -timeout 30 -vframes 1 -r 1 -q:v 5 "$TMPLOCAL/$FILENAME.jpg" \
+        2>&1 > "/tmp/capture-image.log"
 
     if [ $? -eq 0 ]; then
         sleep 3 # wait a bit

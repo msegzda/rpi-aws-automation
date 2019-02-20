@@ -6,6 +6,7 @@
 # dont do anything if process is already running
 if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
     echo "[WARN] Process of ${0} is already running"
+    logger -i -t awscreds-n-leftovers "[WARN] Process of ${0} is already running"
     exit
 fi
 
@@ -20,14 +21,18 @@ LAPSEDIR=$(jq -r .maindir <<< $CONFIG)
 s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)
 maindir=$(jq -r .maindir <<< $CONFIG)
 
+
 # take care of timelapses
-aws s3 mv $LAPSEDIR/dailytimelapses $s3bucket/dailytimelapses --exclude "*" --include "*.mp4" --recursive \
-    --page-size 1 --acl "public-read" 2>&1 | logger -i -t awscreds-n-leftovers
+# only past 1AM
+if [ $(date +"%H") -ge 1 ]; then
+    aws s3 mv $LAPSEDIR/dailytimelapses $s3bucket/dailytimelapses --recursive \
+        --exclude "*" --include "*.mp4"  --page-size 1 --acl public-read \
+        2>&1 | logger -i -t awscreds-n-leftovers
 
-if [ $? -ne 0 ]; then
-    logger -t awscreds-n-leftovers "[WARN] AWSCLI error code: $?"
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        logger -t awscreds-n-leftovers "[WARN] AWSCLI error code: $?"
+    fi
 fi
-
 # take care of some failed files
 find $maindir -name 'aws*.retry' -exec /etc/scripts/retry-files {} \;
 

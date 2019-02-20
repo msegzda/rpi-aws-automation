@@ -1,10 +1,11 @@
 #!/bin/bash
 
-maindir=$(cat /etc/rpi.json | jq -r .maindir)
-aws_r53ttl=$(cat /etc/rpi.json | jq -r .aws.r53ttl)
-aws_r53zoneid=$(cat /etc/rpi.json | jq -r .aws.r53zoneid)
-aws_r53subd=$(cat /etc/rpi.json | jq -r .aws.r53subd)
-aws_r53json=$(cat /etc/rpi.json | jq -r .aws.r53json)
+CONFIG=$(cat /etc/rpi.json)
+maindir=$(jq -r .maindir <<< $CONFIG)
+aws_r53ttl=$(jq -r .aws.r53ttl <<< $CONFIG )
+aws_r53zoneid=$(jq -r .aws.r53zoneid <<< $CONFIG )
+aws_r53subd=$(jq -r .aws.r53subd <<< $CONFIG )
+aws_r53json=$(jq -r .aws.r53json <<< $CONFIG )
 
 if [ ! -d $maindir ]; then
     mkdir -v -p $maindir
@@ -24,7 +25,7 @@ if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
         aws route53 change-resource-record-sets --hosted-zone-id $aws_r53zoneid \
             --change-batch "file:///tmp/get-ip-change-batch.json" 2>&1 \
             | awk '{print}' ORS='' | logger -t get-ip
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             logger -t get-ip "[ERROR] Could not set public IP address on $2! AWS Route53 exit code: $?"
         else
             echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\"}" > $maindir/ip.json
