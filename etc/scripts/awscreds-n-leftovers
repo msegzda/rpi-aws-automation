@@ -24,7 +24,7 @@ maindir=$(jq -r .maindir <<< $CONFIG)
 
 # take care of timelapses
 # only past 1AM
-if [ $(date +"%H") -ge 1 ]; then
+if [ $(date +"%H") -ge 1 ] && [ $(date +"%H") -lt 5 ]; then
     aws s3 mv $LAPSEDIR/dailytimelapses $s3bucket/dailytimelapses --recursive \
         --exclude "*" --include "*.mp4"  --page-size 1 --acl public-read \
         2>&1 | logger -i -t awscreds-n-leftovers

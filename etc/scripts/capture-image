@@ -16,6 +16,8 @@ TMPLOCAL="$maindir/$CAM/$DATEDIR"
 SUNFILE=$(cat $maindir/sunrise-sunset-today.json)
 setoffset=$(jq -r .sun.setoffset <<< $CONFIG)
 riseoffset=$(jq -r .sun.riseoffset <<< $CONFIG)
+jq_temp=$(jq -r .weather.jq_temp <<< $CONFIG)
+jq_wind=$(jq -r .weather.jq_wind <<< $CONFIG)
 
 if [ -z "$CAM" ]; then
     echo "ERROR: Please specify \$1 parameter. Typically this is 'cam1'"
@@ -40,32 +42,44 @@ sunset=`date +"%H%M%S" --date="$(jq -r .results.sunset <<< $SUNFILE) $setoffset"
 NOW=$(date +"%H%M%S")
 
 if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
+    ffmpeg="ffmpeg -rtsp_transport tcp -i $RTSP \
+        -timeout 30 -vframes 1 -r 1 -q:v 5 $TMPLOCAL/$FILENAME.jpg"
+    logger -t capture-image "> $ffmpeg"
+    eval $ffmpeg 2>&1 | logger -t capture-image
 
-    ffmpeg -rtsp_transport tcp -loglevel fatal -i $RTSP \
-        -timeout 30 -vframes 1 -r 1 -q:v 5 "$TMPLOCAL/$FILENAME.jpg" \
-        2>&1 > "/tmp/capture-image.log"
-
-    if [ $? -eq 0 ]; then
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
         sleep 3 # wait a bit
+
+        # now annotate with temperature
+        TEMP=$(jq -rc "$jq_temp" < $maindir/weather.json)
+        convert $TMPLOCAL/$FILENAME.jpg -font Courier -pointsize 65 -gravity southwest \
+            -fill white -annotate 0 $TEMP -quality 60 /tmp/$FILENAME.jpg \
+            2>&1 | logger -t capture-image
+
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            # replace original file with annotated one
+            mv -f /tmp/$FILENAME.jpg  $TMPLOCAL/
+        else
+            logger -t capture-image "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
+            rm -f /tmp/$FILENAME.jpg
+        fi
+
         # now upload to s3
         # requires S3 PutObject and PutObjectAcl permissions
-        aws s3 cp $maindir/$CAM/$DATEDIR/$FILENAME.jpg $s3bucket/$DATEDIR/ \
-            --acl "public-read" >> "/tmp/capture-image.log" 2>&1
+        aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ \
+            --acl "public-read" 2>&1 | logger -t capture-image
 
-        if [ $? -eq 0 ]; then
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
             aws s3 cp "$s3bucket/$DATEDIR/$FILENAME.jpg" "$s3bucket/current.jpg" \
-                --acl "public-read" >> "/tmp/capture-image.log" 2>&1
+                --acl "public-read" 2>&1 | logger -t capture-image
         else
             logger -t capture-image "[WARN] AWSCLI error code: $?"
-            echo "aws s3 cp $maindir/$CAM/$DATEDIR/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
+            echo "aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
                 >> $maindir/aws-s3-cp-$RETRYDATE.retry
             logger -t capture-image "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
         fi
     fi
-
-    # output to log whats done
-    cat "/tmp/capture-image.log" | logger -t capture-image
 else
     echo "Goodnight"
-    /etc/scripts/create-timelapse "$CAM" "$maindir/$CAM/$DATEDIR" "$maindir/aws-s3-cp-$RETRYDATE.retry"
+    /etc/scripts/create-timelapse $CAM $TMPLOCAL $maindir/aws-s3-cp-$RETRYDATE.retry
 fi
