@@ -9,57 +9,47 @@ if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
     exit
 fi
 
-CONFIG=$(cat /etc/rpi.json)
-CAM=${1,,} # always lower case ($1 param)
-ALLJPEGS=$2
-RETRYFILE=$3
-LAPSEFILE=$CAM"_$(date +%Y%m%d).mp4"
-LAPSEDIR=$(jq -r .maindir <<< $CONFIG)"/dailytimelapses"
-
-if [ -z "$CAM" ]; then
+if [ -z "$1" ]; then
     echo "[ERR] Please specify \$1 parameter. Typically this is 'cam1'"
     exit
 fi
 
-# delete empty dirs
-find $ALLJPEGS -type d -empty -delete
+loggertitle="$(basename ${0})[$$]"
+CONFIG=$(cat /etc/rpi.json)
+CAM=${1,,} # always lower case ($1 param)
+if [ ! -z "$2" ]; then
+    DATEDIR=$(date +%Y/%m/%d --date="$2")
+    LAPSEFILE="${CAM}_$(date +%Y%m%d --date="$2").mp4"
+else
+    DATEDIR=$(date +%Y/%m/%d --date="yesterday 13:00")
+    LAPSEFILE="${CAM}_$(date +%Y%m%d --date="yesterday 13:00").mp4"
+fi
+maindir=$(jq -r .maindir <<< $CONFIG)
+ALLJPEGS="$maindir/$CAM/$DATEDIR"
+LAPSEDIR="$maindir/dailytimelapses"
 
-if [ -z "$ALLJPEGS" ] || [ ! -d $ALLJPEGS ]; then
-    echo "[ERR] Please specify \$2 parameter with full path where *.jpg files resides. Directory must be not empty."
+if [ ! -d $ALLJPEGS ]; then
+    echo "[ERR] Directory $ALLJPEGS does not exist or you provided incorrect \$1 and \$2 parameters"
     exit
 fi
 
 if [ ! -d $LAPSEDIR ]; then
-    mkdir -v -p $LAPSEDIR
-fi
-
-if [ -f "$LAPSEDIR/$LAPSEFILE" ]; then
-    echo "[WARN] Timelapse $LAPSEDIR/$LAPSEFILE file already exist"
-    exit
-fi
-
-if [ -f "/tmp/$LAPSEFILE" ]; then
-    echo "[WARN] Timelapse /tmp/$LAPSEFILE file already exist"
-    exit
+    mkdir -v -p $LAPSEDIR | logger -i -t $loggertitle
 fi
 
 # if we are here we are good to make a timelapse!
-logger -i -t create-timelapse "> /etc/scripts/create-timelapse $CAM $ALLJPEGS"
+ffmpeg="ionice -c2 -n 5 ffmpeg -r 24 -pattern_type glob -i \"$ALLJPEGS/*.jpg\" \
+    -s hd1080 -vcodec libx264 -pix_fmt yuvj420p /tmp/$LAPSEFILE -y"
+logger -i -t $loggertitle "> $ffmpeg"
 
-ffmpeg -r 24 -pattern_type glob -i "$ALLJPEGS/*.jpg" \
-    -s hd1080 -vcodec libx264 "/tmp/$LAPSEFILE" -y
+eval $ffmpeg
 
-if [ $? -eq 0 ]; then
-    mv -fv "/tmp/$LAPSEFILE" "$LAPSEDIR/$LAPSEFILE" | logger -i -t create-timelapse
-    logger -i -t create-timelapse "[OK] $LAPSEDIR/$LAPSEFILE"
-    # will move to S3 with separate script
-    # if no $RETRYFILE we are good to wipe the dir!
-    if [ ! -z "$RETRYFILE" ] && [ ! -f $RETRYFILE ]; then
-        rm -fv "$ALLJPEGS/*.jpg" 2>&1 | logger -i -t create-timelapse
-    else
-        logger -i -t create-timelapse "[WARN] $RETRYFILE contains images not synced to S3."
-    fi
+if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    mv -fv /tmp/$LAPSEFILE $LAPSEDIR/$LAPSEFILE | logger -i -t $loggertitle
+    logger -i -t $loggertitle "[OK] $LAPSEDIR/$LAPSEFILE"
+    # now wipe the dir!
+    rm -fr $ALLJPEGS 2>&1 | logger -i -t $loggertitle
 else
-    logger -i -t create-timelapse "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"
-    rm -fv "$LAPSEDIR/$LAPSEFILE" 2>&1 | logger -i -t create-timelapse
+    logger -i -t $loggertitle "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"
+    rm -fv "/tmp/$LAPSEFILE" 2>&1 | logger -i -t $loggertitle
 fi

@@ -5,17 +5,19 @@
 
 CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
-weatherapi=$(jq -r .weather.api <<< $CONFIG)
 jq_query1=$(jq -r .weather.jq_query1 <<< $CONFIG)
 outraw="/tmp/weather-all.json"
 out="$maindir/weather.json"
+takecmd=$(jq -r .weather.takecmd <<< $CONFIG)
+takecmd=$(printf "$takecmd" $outraw)
 
 if [ ! -d $maindir ]; then
     mkdir -v -p $maindir
     chmod -v 777 $maindir
 fi
 
-curl -m 10 -s -f "$weatherapi" -o $outraw
+logger -t weather-now "> $takecmd"
+eval $takecmd
 
 if [ $? -eq 0 ]; then
     echo "$out written"

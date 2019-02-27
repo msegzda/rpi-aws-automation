@@ -9,23 +9,19 @@ fi
 
 CONFIG-$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
-filename=$(basename $1)
+retryfilename=$(basename $1)
 
-logger -t -i retry-files "Taking file $1"
 mv -fv $1 /tmp/ | logger -t retry-files
 
 # now iterate through the file
-oks=0;errs=0
 while IFS='' read -r line || [[ -n "$line" ]]; do
     eval $line
     if [ $? -ne 0 ]; then
-        logger -t -i retry-files "[ERR:$?] $line"
-        echo $line >> "$maindir/$filename"
-        errs=$(($errs+1))
+        retrycmd="echo \"$line\" >> $maindir/$retryfilename"
+        logger -t retry-files "[ERR] Something failed. Will retry once more:"
+        logger -t retry-files "> $retrycmd"
+        eval $retrycmd
     else
-        logger -t -i retry-files "[OK] $line"
-        oks=$(($oks+1))
+        logger -t retry-files "[OK] $line"
     fi
-done < "/tmp/$filename"
-
-logger -t -i retry-files "Summary: successfully retried $oks command(s). Failed $errs"
+done < "/tmp/$retryfilename"

@@ -6,6 +6,7 @@ if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
     exit
 fi
 
+loggertitle="$(basename ${0})[$$]"
 FILENAME=`date +%Y%m%d%H%M%S`
 DATEDIR=`date +%Y/%m/%d`
 RETRYDATE=`date +%Y%m%d`
@@ -20,10 +21,10 @@ jq_temp=$(jq -r .weather.jq_temp <<< $CONFIG)
 jq_wind=$(jq -r .weather.jq_wind <<< $CONFIG)
 
 if [ -z "$CAM" ]; then
-    echo "ERROR: Please specify \$1 parameter. Typically this is 'cam1'"
+    echo "ERROR: Please specify \$1 parameter (for eg. cam1)"
     exit
 fi
-RTSP=$(jq -r .$CAM.rtsp <<< $CONFIG)
+
 s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
 
 if [ -z "$SUNFILE" ]; then
@@ -42,44 +43,56 @@ sunset=`date +"%H%M%S" --date="$(jq -r .results.sunset <<< $SUNFILE) $setoffset"
 NOW=$(date +"%H%M%S")
 
 if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
-    ffmpeg="ffmpeg -rtsp_transport tcp -i $RTSP \
-        -timeout 30 -vframes 1 -r 1 -q:v 5 $TMPLOCAL/$FILENAME.jpg"
-    logger -t capture-image "> $ffmpeg"
-    eval $ffmpeg 2>&1 | logger -t capture-image
+    takecmd=$(jq -r .$CAM.takecmd <<< $CONFIG)
+    takecmd=$(printf "$takecmd" "/tmp/$CAM-$FILENAME-1.jpg")
+    logger -i -t $loggertitle "> $takecmd"
+    eval $takecmd 2>&1 | logger -i -t $loggertitle
 
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    # todo: test content. If not JPG reboot the cam
+    # curl -X PUT "http://IPADDRESS/cgi-bin/api.cgi?cmd=reboot&code=0&user=username&password=password"
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        logger -i -t $loggertitle "[ERR] Failed to take image from $CAM"
+    else
         sleep 3 # wait a bit
 
         # now annotate with temperature
-        TEMP=$(jq -rc "$jq_temp" < $maindir/weather.json)
-        convert $TMPLOCAL/$FILENAME.jpg -font Courier -pointsize 65 -gravity southwest \
-            -fill white -annotate 0 $TEMP -quality 60 /tmp/$FILENAME.jpg \
-            2>&1 | logger -t capture-image
+        temp=$(jq -rc "$jq_temp" < $maindir/weather.json)
+        wind=$(jq -rc "$jq_wind" < $maindir/weather.json)
+        annotateformat=$(jq -r .$CAM.annotateformat <<< $CONFIG)
+        annotateformat=$(printf "$annotateformat" "$temp" "$CAM")
+        annotatecmd=$(jq -r .$CAM.annotatecmd <<< $CONFIG)
+        annotatecmd=$(printf "$annotatecmd" "/tmp/$CAM-$FILENAME-1.jpg" "$annotateformat" "/tmp/$CAM-$FILENAME-2.jpg")
+        logger -i -t $loggertitle "> $annotatecmd"
+        eval $annotatecmd 2>&1 | logger -i -t $loggertitle
 
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
-            # replace original file with annotated one
-            mv -f /tmp/$FILENAME.jpg  $TMPLOCAL/
+            # place annotated image into correct place
+            mv -fv /tmp/$CAM-$FILENAME-2.jpg $TMPLOCAL/$FILENAME.jpg | logger -i -t $loggertitle
         else
-            logger -t capture-image "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
-            rm -f /tmp/$FILENAME.jpg
+            logger -i -t $loggertitle "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
         fi
+        # remove residual tmp files
+        rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -i -t $loggertitle
 
         # now upload to s3
         # requires S3 PutObject and PutObjectAcl permissions
         aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ \
-            --acl "public-read" 2>&1 | logger -t capture-image
+            --acl "public-read" 2>&1 | logger -i -t $loggertitle
 
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
             aws s3 cp "$s3bucket/$DATEDIR/$FILENAME.jpg" "$s3bucket/current.jpg" \
-                --acl "public-read" 2>&1 | logger -t capture-image
+                --acl "public-read" 2>&1 | logger -i -t $loggertitle
         else
-            logger -t capture-image "[WARN] AWSCLI error code: $?"
-            echo "aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
-                >> $maindir/aws-s3-cp-$RETRYDATE.retry
-            logger -t capture-image "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
+            logger -i -t $loggertitle "[WARN] AWSCLI failed"
+            if [ -f $TMPLOCAL/$FILENAME.jpg ]; then
+                echo "aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
+                    >> $maindir/aws-s3-cp-$RETRYDATE.retry
+                logger -i -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
+            else
+                logger -i -t $loggertitle "[WARN] File $TMPLOCAL/$FILENAME.jpg does not exist"
+            fi
         fi
     fi
 else
     echo "Goodnight"
-    /etc/scripts/create-timelapse $CAM $TMPLOCAL $maindir/aws-s3-cp-$RETRYDATE.retry
 fi

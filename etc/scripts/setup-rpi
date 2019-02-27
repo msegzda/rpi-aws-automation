@@ -73,10 +73,11 @@ else
         echo "HOME=$HOME"; \
         echo "$sun_takefrequency /etc/scripts/sunset-sunrise-today &> /dev/null"; \
         echo "$weather_takefrequency /etc/scripts/weather-now &> /dev/null"; \
-        echo "45 1 * * 0 shutdown -r"; \
+        echo "45 1 * * 0 sleep 45s;shutdown -r"; \
         echo "@hourly /etc/scripts/get-ip &> /dev/null"; \
         echo "1 */1 * * * /etc/scripts/awscreds-n-leftovers &> /dev/null"; \
-        echo "$cam1_takefrequency /etc/scripts/capture-image cam1 &> /dev/null"
+        echo "$cam1_takefrequency /etc/scripts/capture-image cam1 &> /dev/null"; \
+        echo "*/1 * * * * /etc/scripts/system-status &> /dev/null"
     ) | crontab -
     crontab -l
 

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# quick access to this on AWSlOGS:
+# https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#logEventViewer:group=/var/log/messages;filter=%22system-status%22;start=P1D
+
+loggertitle="$(basename ${0})[$$]"
+
+ionice -c2 -n7 uptime | awk -F' *,? *' '{print "Load times: " $11, $12, $13}' \
+    | logger -i -t $loggertitle
+
+cpu_temp=$(</sys/class/thermal/thermal_zone0/temp)
+
+echo "CPU temperature: $(($cpu_temp/1000))" | logger -i -t $loggertitle

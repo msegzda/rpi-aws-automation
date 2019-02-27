@@ -30,3 +30,7 @@
  1. Install SSM agent using [this AWS tutorial](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html#agent-install-raspbianjessie)
  Note: use `SSMServiceRole` role from already created list when creating activation request.
  1. Execute `/etc/scripts/setup-rpi` to configure AWSCLI, AWSLOGS and rest of settings
+
+## TODO ##
+
+Try FFMPEG with Lambda: https://intoli.com/blog/transcoding-on-aws-lambda/
