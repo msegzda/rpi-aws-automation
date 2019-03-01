@@ -1,5 +1,7 @@
 #!/bin/bash
 
+loggertitle="$(basename ${0})[$$]"
+
 CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 aws_r53ttl=$(jq -r .aws.r53ttl <<< $CONFIG )
@@ -21,18 +23,18 @@ if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
     if [ "${publicIP}" != "${publicIP_previous}" ]; then
         echo $(printf $aws_r53json "$aws_r53subd" "$aws_r53ttl" "$publicIP") \
             > /tmp/get-ip-change-batch.json
-        cat /tmp/get-ip-change-batch.json | logger -t "get-ip Route53"
+        cat /tmp/get-ip-change-batch.json | logger -t $loggertitle
         aws route53 change-resource-record-sets --hosted-zone-id $aws_r53zoneid \
             --change-batch "file:///tmp/get-ip-change-batch.json" 2>&1 \
-            | awk '{print}' ORS='' | logger -t get-ip
+            | awk '{print}' ORS='' | logger -t $loggertitle
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            logger -t get-ip "[ERROR] Could not set public IP address on $2! AWS Route53 exit code: $?"
+            logger -t $loggertitle "[ERR] Could not set public IP address on $2! AWS Route53 exit code: $?"
         else
             echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\"}" > $maindir/ip.json
-            cat $maindir/ip.json | logger -t "get-ip $maindir/ip.json"
+            cat $maindir/ip.json | logger -t $loggertitle "$maindir/ip.json"
             rm -vf /tmp/get-ip-change-batch.json
         fi
     fi
 else
-    logger -t get-ip "[WARN] Could not determine private or public IP address!"
+    logger -t $loggertitle "[ERR] Could not determine private or public IP address!"
 fi

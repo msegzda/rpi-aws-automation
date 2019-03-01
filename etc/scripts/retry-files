@@ -7,21 +7,23 @@ if [ ! -f $1 ]; then
     echo "[ERR] File $1 does not exist. Cannot continue."
 fi
 
-CONFIG-$(cat /etc/rpi.json)
+loggertitle="$(basename ${0})[$$]"
+
+CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 retryfilename=$(basename $1)
 
-mv -fv $1 /tmp/ | logger -t retry-files
+mv -fv $1 /tmp/ | logger -t $loggertitle
 
 # now iterate through the file
 while IFS='' read -r line || [[ -n "$line" ]]; do
     eval $line
     if [ $? -ne 0 ]; then
         retrycmd="echo \"$line\" >> $maindir/$retryfilename"
-        logger -t retry-files "[ERR] Something failed. Will retry once more:"
-        logger -t retry-files "> $retrycmd"
+        logger -t $loggertitle "[ERR] Something failed. Will try again on next run."
+        logger -t $loggertitle "> $retrycmd"
         eval $retrycmd
     else
-        logger -t retry-files "[OK] $line"
+        logger -t $loggertitle "[OK] $line"
     fi
 done < "/tmp/$retryfilename"

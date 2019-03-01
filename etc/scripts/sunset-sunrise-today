@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# set this to your own location
-maindir=$(cat /etc/rpi.json | jq -r .maindir)
-sunapi=$(cat /etc/rpi.json | jq -r .sun.api)
+loggertitle="$(basename ${0})[$$]"
+
+CONFIG=$(cat /etc/rpi.json)
+maindir=$(jq -r .maindir <<< $CONFIG)
+sunapi=$(jq -r .sun.api <<< $CONFIG)
 out="$maindir/sunrise-sunset-today.json"
 
 if [ ! -d $maindir ]; then
@@ -15,7 +17,7 @@ curl -m 10 -s -f "$sunapi" -o $out
 if [ $? -eq 0 ]; then
     echo "$out written"
 else
-    logger -t sunrise-sunset-today "[WARN] Failed update $out file. CURL exit code: $?"
+    logger -t $loggertitle "[WARN] Failed update $out file. CURL exit code: $?"
 fi
 
-cat $out | logger -t sunrise-sunset-today
+cat $out | logger -t $loggertitle

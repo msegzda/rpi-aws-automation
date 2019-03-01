@@ -5,7 +5,7 @@
 
 # dont do anything if process is already running
 if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
-    echo "[WARN] Process of ${0} is already running"
+    echo "[ERR] Process of ${0} is already running"
     exit
 fi
 
@@ -15,10 +15,15 @@ if [ -z "$1" ]; then
 fi
 
 loggertitle="$(basename ${0})[$$]"
+
 CONFIG=$(cat /etc/rpi.json)
 CAM=${1,,} # always lower case ($1 param)
 if [ ! -z "$2" ]; then
     DATEDIR=$(date +%Y/%m/%d --date="$2")
+    if [ $? -ne 0 ]; then
+        logger -t $loggertitle "[ERR] Issues with date provided. Cannot continue."
+        exit
+    fi
     LAPSEFILE="${CAM}_$(date +%Y%m%d --date="$2").mp4"
 else
     DATEDIR=$(date +%Y/%m/%d --date="yesterday 13:00")
@@ -34,22 +39,34 @@ if [ ! -d $ALLJPEGS ]; then
 fi
 
 if [ ! -d $LAPSEDIR ]; then
-    mkdir -v -p $LAPSEDIR | logger -i -t $loggertitle
+    mkdir -v -p $LAPSEDIR | logger -t $loggertitle
+fi
+
+if [ "$3" == "forcefroms3" ]; then
+    # download everything from S3
+    s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM/$DATEDIR"
+    s3sync="aws s3 sync $s3bucket/ $ALLJPEGS/ --exclude=* --include=*.jpg"
+    logger -t $loggertitle "> $s3sync"
+    eval $s3sync
+    if [ $? -ne 0 ]; then
+        logger -t $loggertitle "[ERR] AWS CLI s3 sync failed. Cannot continue."
+        exit
+    fi
 fi
 
 # if we are here we are good to make a timelapse!
 ffmpeg="ionice -c2 -n 5 ffmpeg -r 24 -pattern_type glob -i \"$ALLJPEGS/*.jpg\" \
     -s hd1080 -vcodec libx264 -pix_fmt yuvj420p /tmp/$LAPSEFILE -y"
-logger -i -t $loggertitle "> $ffmpeg"
+logger -t $loggertitle "> $ffmpeg"
 
 eval $ffmpeg
 
 if [ ${PIPESTATUS[0]} -eq 0 ]; then
-    mv -fv /tmp/$LAPSEFILE $LAPSEDIR/$LAPSEFILE | logger -i -t $loggertitle
-    logger -i -t $loggertitle "[OK] $LAPSEDIR/$LAPSEFILE"
+    mv -fv /tmp/$LAPSEFILE $LAPSEDIR/$LAPSEFILE | logger -t $loggertitle
+    logger -t $loggertitle "[OK] $LAPSEDIR/$LAPSEFILE"
     # now wipe the dir!
-    rm -fr $ALLJPEGS 2>&1 | logger -i -t $loggertitle
+    rm -fr $ALLJPEGS 2>&1 | logger -t $loggertitle
 else
-    logger -i -t $loggertitle "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"
-    rm -fv "/tmp/$LAPSEFILE" 2>&1 | logger -i -t $loggertitle
+    logger -t $loggertitle "[ERR] Failed to create $LAPSEDIR/$LAPSEFILE timelapse. FFMPEG exit code: $?"
+    rm -fv "/tmp/$LAPSEFILE" 2>&1 | logger -t $loggertitle
 fi

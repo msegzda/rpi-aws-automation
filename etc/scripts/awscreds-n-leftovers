@@ -1,22 +1,21 @@
 #!/bin/bash
 
+loggertitle="$(basename ${0})[$$]"
+
 # dont do anything if process is already running
 if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
-    echo "[WARN] Process of ${0} is already running"
-    logger -i -t $loggertitle "[WARN] Process of ${0} is already running"
+    echo "[ERR] Process of ${0} is already running"
+    logger -t $loggertitle "[ERR] Process of ${0} is already running"
     exit
 fi
 
-loggertitle="$(basename ${0})[$$]"
-
-rm -fv /root/.aws/credentials | logger -i -t $loggertitle
+rm -fv /root/.aws/credentials | logger -t $loggertitle
 service amazon-ssm-agent restart
 service awslogs restart
-logger -i -t $loggertitle "Reloaded amazon-ssm-agent and awslogs"
+logger -t $loggertitle "Reloaded amazon-ssm-agent and awslogs"
 
 # do some leftovers
 CONFIG=$(cat /etc/rpi.json)
-LAPSEDIR=$(jq -r .maindir <<< $CONFIG)
 s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)
 maindir=$(jq -r .maindir <<< $CONFIG)
 
@@ -27,34 +26,36 @@ find $maindir -name 'aws*.retry' -exec /etc/scripts/retry-files {} \;
 DATEDIR=`date +%Y/%m/%d`
 CAM="cam1" # TODO make this dynamic from rpi.json
 TMPLOCAL="$maindir/$CAM/$DATEDIR"
+HOUR=$(date +"%H")
 
 # make timelapse for yesterday
-if [ $(date +"%H") -eq 1 ]; then
+if [ $HOUR -eq 1 ]; then
     /etc/scripts/create-timelapse $CAM
 fi
 
 # move to S3 only in the hours from 1 to 5 AM
-if [ $(date +"%H") -ge 1 ] && [ $(date +"%H") -lt 5 ]; then
-    aws s3 mv $LAPSEDIR/dailytimelapses $s3bucket/dailytimelapses --recursive \
-        --exclude "*" --include "*.mp4"  --page-size 1 --acl public-read \
-        2>&1 | logger -i -t $loggertitle
+if [ $HOUR -ge 1 ] && [ $HOUR -lt 5 ] && [ -d $maindir/dailytimelapses ]; then
+
+    find $maindir/dailytimelapses -type f -name "*.mp4" -exec \
+        aws s3 mv {} $s3bucket/dailytimelapses --acl public-read --only-show-errors \; \
+        2>&1 | logger -t $loggertitle
 
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        logger -t $loggertitle "[WARN] AWSCLI error code: ${PIPESTATUS[0]}"
+        logger -t $loggertitle "[ERR] AWSCLI error code: ${PIPESTATUS[0]}"
+    else
+        logger -t $loggertitle "[OK] $LAPSEDIR/dailytimelapses files moved to S3"
+        touch $LAPSEDIR/dailytimelapses/never.empty
     fi
+
 fi
 
 # delete old *.retry files
-find /tmp -mtime -1 -type f -name "*.retry" -delete
-
+find /tmp -mtime +1 -type f -name "*.retry" -exec rm -vf {} \; | logger -t $loggertitle
 # delete old *.jpg files
-find $maindir -mtime -10 -type f -name "*.jpg" -delete
-
+find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
 # delete old timelapses
-find $maindir -mtime -20 -type f -name "*.mp4" -delete
-
+find $maindir -mtime +20 -type f -name "*.mp4" -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old temporary files
-find $maindir -mtime -10 -type f -name 'awscli-n-logs-updated.tmp' -delete
-
+find $maindir -mtime +10 -type f -name "awscli-n-logs-updated.tmp" -exec rm -vf {} \; | logger -t $loggertitle
 # delete empty dirs
-find $maindir -mtime -10 -type d -empty -delete
+find $maindir -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle

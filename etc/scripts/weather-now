@@ -3,6 +3,8 @@
 # quick access to this on AWSlOGS:
 # https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#logEventViewer:group=/var/log/messages;stream=RPI1;filter=%22weather-now%22;start=PT2H
 
+loggertitle="$(basename ${0})[$$]"
+
 CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 jq_query1=$(jq -r .weather.jq_query1 <<< $CONFIG)
@@ -16,14 +18,13 @@ if [ ! -d $maindir ]; then
     chmod -v 777 $maindir
 fi
 
-logger -t weather-now "> $takecmd"
+logger -t $loggertitle "> $takecmd"
 eval $takecmd
 
 if [ $? -eq 0 ]; then
-    echo "$out written"
-    # todo run jq query here
     jq -rc "$jq_query1" < $outraw > $out
-    logger -t weather-now < $out
 else
-    logger -t weather-now "[WARN] Failed update $out file. CURL exit code: $?"
+    logger -t $loggertitle "[ERR] CURL exit code $?. Will use $out from previous run."
 fi
+
+logger -t $loggertitle < $out

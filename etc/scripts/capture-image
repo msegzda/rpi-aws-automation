@@ -2,11 +2,12 @@
 
 # dont do anything if process is already running
 if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
-    echo "[WARN] Process of ${0} is already running"
+    echo "[ERR] Process of ${0} is already running"
     exit
 fi
 
 loggertitle="$(basename ${0})[$$]"
+
 FILENAME=`date +%Y%m%d%H%M%S`
 DATEDIR=`date +%Y/%m/%d`
 RETRYDATE=`date +%Y%m%d`
@@ -45,13 +46,13 @@ NOW=$(date +"%H%M%S")
 if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
     takecmd=$(jq -r .$CAM.takecmd <<< $CONFIG)
     takecmd=$(printf "$takecmd" "/tmp/$CAM-$FILENAME-1.jpg")
-    logger -i -t $loggertitle "> $takecmd"
-    eval $takecmd 2>&1 | logger -i -t $loggertitle
+    logger -t $loggertitle "> $takecmd"
+    eval $takecmd 2>&1 | logger -t $loggertitle
 
     # todo: test content. If not JPG reboot the cam
     # curl -X PUT "http://IPADDRESS/cgi-bin/api.cgi?cmd=reboot&code=0&user=username&password=password"
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        logger -i -t $loggertitle "[ERR] Failed to take image from $CAM"
+        logger -t $loggertitle "[ERR] Failed to take image from $CAM"
     else
         sleep 3 # wait a bit
 
@@ -62,34 +63,34 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
         annotateformat=$(printf "$annotateformat" "$temp" "$CAM")
         annotatecmd=$(jq -r .$CAM.annotatecmd <<< $CONFIG)
         annotatecmd=$(printf "$annotatecmd" "/tmp/$CAM-$FILENAME-1.jpg" "$annotateformat" "/tmp/$CAM-$FILENAME-2.jpg")
-        logger -i -t $loggertitle "> $annotatecmd"
-        eval $annotatecmd 2>&1 | logger -i -t $loggertitle
+        logger -t $loggertitle "> $annotatecmd"
+        eval $annotatecmd 2>&1 | logger -t $loggertitle
 
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
             # place annotated image into correct place
-            mv -fv /tmp/$CAM-$FILENAME-2.jpg $TMPLOCAL/$FILENAME.jpg | logger -i -t $loggertitle
+            mv -fv /tmp/$CAM-$FILENAME-2.jpg $TMPLOCAL/$FILENAME.jpg | logger -t $loggertitle
         else
-            logger -i -t $loggertitle "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
+            logger -t $loggertitle "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
         fi
         # remove residual tmp files
-        rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -i -t $loggertitle
+        rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -t $loggertitle
 
         # now upload to s3
         # requires S3 PutObject and PutObjectAcl permissions
         aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ \
-            --acl "public-read" 2>&1 | logger -i -t $loggertitle
+            --acl "public-read" 2>&1 | logger -t $loggertitle
 
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
             aws s3 cp "$s3bucket/$DATEDIR/$FILENAME.jpg" "$s3bucket/current.jpg" \
-                --acl "public-read" 2>&1 | logger -i -t $loggertitle
+                --acl "public-read" 2>&1 | logger -t $loggertitle
         else
-            logger -i -t $loggertitle "[WARN] AWSCLI failed"
+            logger -t $loggertitle "[WARN] AWSCLI failed"
             if [ -f $TMPLOCAL/$FILENAME.jpg ]; then
                 echo "aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read" \
                     >> $maindir/aws-s3-cp-$RETRYDATE.retry
-                logger -i -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
+                logger -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
             else
-                logger -i -t $loggertitle "[WARN] File $TMPLOCAL/$FILENAME.jpg does not exist"
+                logger -t $loggertitle "[WARN] File $TMPLOCAL/$FILENAME.jpg does not exist"
             fi
         fi
     fi
