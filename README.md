@@ -1,4 +1,6 @@
-# Setup instructions #
+# Friendly disclaimer #
+
+This solution is not complete. Its not world tested, in many areas not working as expected and is generally not stable. By using scripts from this repo you are risking to screw up the RPI configuration and loosing ALL data.
 
 ## Image installation ##
 
@@ -11,12 +13,15 @@
 
  1. SSH to RPi and login. Username: pi; password: raspberry
  1. Change default `pi` user password to something secure
+
     ``` bash
     sudo passwd pi
     ```
+
  1. SSH to server and install the following prerequisites:
+
     ``` bash
-    apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils imagemagick
+    apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils imagemagick nginx
     ```
 
 ## Install FTP server for cameras ##
@@ -30,7 +35,3 @@
  1. Install SSM agent using [this AWS tutorial](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html#agent-install-raspbianjessie)
  Note: use `SSMServiceRole` role from already created list when creating activation request.
  1. Execute `/etc/scripts/setup-rpi` to configure AWSCLI, AWSLOGS and rest of settings
-
-## TODO ##
-
-Try FFMPEG with Lambda: https://intoli.com/blog/transcoding-on-aws-lambda/

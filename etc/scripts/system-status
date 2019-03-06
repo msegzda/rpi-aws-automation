@@ -8,8 +8,8 @@ loggertitle="$(basename ${0})[$$]"
 cpu_temp=$(</sys/class/thermal/thermal_zone0/temp)
 cpu_temp=$(($cpu_temp/1000))
 
-load_times=$(ionice -c2 -n7 uptime | awk -F' *,? *' '{print "\"load1\":"$11",\"load5\":"$12",\"load15\":"$13}')
+load_averages=$(ionice -c2 -n7 cut -d' ' -f-3 /proc/loadavg|sed -e "s/ /,/g")
 
-out="{\"host\":\"$HOSTNAME\",\"cpu_temp\":$cpu_temp,$load_times}"
+out="{\"host\":\"$HOSTNAME\",\"cpu_temp\":$cpu_temp,\"load_averages\":[$load_averages]}"
 echo "$out"
 echo "$out" | logger -t $loggertitle
