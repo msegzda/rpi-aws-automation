@@ -76,6 +76,7 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
     # now annotate with temperature
     temp=$(jq -rc "$jq_temp" < $maindir/weather.json)
     wind=$(jq -rc "$jq_wind" < $maindir/weather.json)
+    camname=$(jq -r .$CAM.name <<< $CONFIG)
     annotateformat=$(jq -r .$CAM.annotateformat <<< $CONFIG)
     annotateformat=$(printf "$annotateformat" "$temp" "$CAM")
     annotatecmd=$(jq -r .$CAM.annotatecmd <<< $CONFIG)

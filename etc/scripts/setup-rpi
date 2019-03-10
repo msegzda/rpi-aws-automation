@@ -32,8 +32,9 @@ if [ ! -f "$maindir/awscli-n-logs-updated.tmp" ]; then
     pip2 install awscli --upgrade
 
     echo "Installing AWSLOGS..."
+    service awslogs stop
     pip2 install awslogs --upgrade
-    service awslogs restart
+    service awslogs start
     touch "$maindir/awscli-n-logs-updated.tmp"
 else
     echo "AWSCLI and AWSLOGS recently updated:"
@@ -76,6 +77,7 @@ else
         echo "45 1 * * 0 sleep 45s;shutdown -r"; \
         echo "@hourly /etc/scripts/get-ip &> /dev/null"; \
         echo "1 */1 * * * /etc/scripts/awscreds-n-leftovers &> /dev/null"; \
+        echo "5 * * * * sleep 45s;/etc/scripts/move-motion-vids &> /dev/null"; \
         echo "$cam1_takefrequency /etc/scripts/capture-image cam1 &> /dev/null"; \
         echo "*/1 * * * * /etc/scripts/system-status &> /dev/null"
     ) | crontab -

@@ -54,6 +54,7 @@ fi
 # delete files from tmp
 find /tmp -mtime +1 -type f -name "*.retry" -exec rm -vf {} \; | logger -t $loggertitle
 find /tmp -mmin +59 -type f -name "*.rebooted" -exec rm -vf {} \; | logger -t $loggertitle
+find /tmp -mmin +59 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
 
 # delete old *.jpg files
 find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
@@ -64,6 +65,6 @@ find $maindir -mtime +10 -type f -name "awscli-n-logs-updated.tmp" -exec rm -vf 
 # wipe old files from ftp dir
 find $ftpdir -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # delete empty dirs
-find $maindir -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
-find $wwwhtml -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
-find $ftpdir -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
+find $maindir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
+find $wwwhtml -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
+find $ftpdir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
