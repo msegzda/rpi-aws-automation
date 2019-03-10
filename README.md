@@ -21,7 +21,7 @@ This solution is not complete. Its not world tested, in many areas not working a
  1. SSH to server and install the following prerequisites:
 
     ``` bash
-    apt-get install -y --upgrade ffmpeg screen pure-ftpd jq dnsutils imagemagick nginx
+    apt-get install -y --upgrade ffmpeg screen vsftpd ftp jq dnsutils imagemagick nginx
     ```
 
 ## Install FTP server for cameras ##

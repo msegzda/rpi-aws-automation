@@ -59,10 +59,16 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
 
     # If file is not JPEG reboot the cam with $rebootcmd
     if [[ ${PIPESTATUS[0]} -ne 0 ]] || [[ ! $(file -b "/tmp/$CAM-$FILENAME-1.jpg") =~ JPEG ]]; then
-        rebootcmd=$(jq -r .$CAM.rebootcmd <<< $CONFIG)
-        logger -t $loggertitle "[ERR] $CAM failed to provide JPEG. Sending reboot command:"
-        logger -t $loggertitle "> $rebootcmd"
-        eval $rebootcmd 2>&1 | logger -t $loggertitle
+        logger -t $loggertitle "[ERR] $CAM failed to provide JPEG"
+        # reboot of cam cannot happen frequently
+        if [ ! -e /tmp/$CAM.rebooted ]; then
+            rebootcmd=$(jq -r .$CAM.rebootcmd <<< $CONFIG)
+            logger -t $loggertitle "> $rebootcmd"
+            eval $rebootcmd 2>&1 | awk '{print}' ORS='' | logger -t $loggertitle
+            touch /tmp/$CAM.rebooted
+        else
+            logger -t $loggertitle "[WARN] $CAM was rebooted lately, not sending another command."
+        fi
         exit
     fi
 
@@ -92,8 +98,10 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
         --acl "public-read" 2>&1 | logger -t $loggertitle
 
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
-        redirto="$s3public/$DATEDIR/$FILENAME.jpg"
-        sed "s/{FULL_URL}/${redirto}/g" $wwwhtml/redirect.template.html > $htmlcurrent/index.html
+        redirto=$(sed "s/\//\\\\\//g" <<< "$s3public/$DATEDIR/$FILENAME.jpg")
+        sedcmd="sed \"s/%s/${redirto}/g\" $wwwhtml/redirect.template.html > $htmlcurrent/index.html"
+        logger -t $loggertitle "> $sedcmd"
+        eval $sedcmd
     else
         logger -t $loggertitle "[ERR] AWSCLI failed. Exit code: ${PIPESTATUS[0]}"
         if [ -f $TMPLOCAL/$FILENAME.jpg ]; then

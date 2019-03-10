@@ -18,6 +18,7 @@ logger -t $loggertitle "Reloaded amazon-ssm-agent and awslogs"
 CONFIG=$(cat /etc/rpi.json)
 s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)
 maindir=$(jq -r .maindir <<< $CONFIG)
+ftpdir=$(jq -r .ftp.dir <<< $CONFIG)
 wwwhtml="/var/www/html"
 
 # take care of some failed files
@@ -50,14 +51,19 @@ if [ $HOUR -ge 1 ] && [ $HOUR -lt 5 ] && [ -d $maindir/dailytimelapses ]; then
 
 fi
 
-# delete old *.retry files
+# delete files from tmp
 find /tmp -mtime +1 -type f -name "*.retry" -exec rm -vf {} \; | logger -t $loggertitle
+find /tmp -mmin +59 -type f -name "*.rebooted" -exec rm -vf {} \; | logger -t $loggertitle
+
 # delete old *.jpg files
 find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
 # delete old timelapses
 find $maindir -mtime +20 -type f -name "*.mp4" -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old temporary files
 find $maindir -mtime +10 -type f -name "awscli-n-logs-updated.tmp" -exec rm -vf {} \; | logger -t $loggertitle
+# wipe old files from ftp dir
+find $ftpdir -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # delete empty dirs
 find $maindir -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $wwwhtml -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
+find $ftpdir -mtime +1 -mindepth 1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
