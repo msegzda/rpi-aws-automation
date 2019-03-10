@@ -24,10 +24,9 @@ This solution is not complete. Its not world tested, in many areas not working a
     apt-get install -y --upgrade ffmpeg screen vsftpd ftp jq dnsutils imagemagick nginx
     ```
 
-## Install FTP server for cameras ##
+## Anonymous FTP ##
 
- 1. Use [this tutorial](https://www.raspberrypi.org/documentation/remote-access/ftp.md)
- Note to set "upload" user with /var/captures/FTP home directory!
+ 1. vsftpd is installed for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only.
 
 ## How to setup RPI with SSM ##
 

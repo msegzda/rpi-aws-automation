@@ -9,6 +9,7 @@ CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 jq_query1=$(jq -r .weather.jq_query1 <<< $CONFIG)
 outraw="/tmp/weather-all.json"
+outtmp="/tmp/weather.json"
 out="$maindir/weather.json"
 takecmd=$(jq -r .weather.takecmd <<< $CONFIG)
 takecmd=$(printf "$takecmd" $outraw)
@@ -22,9 +23,13 @@ logger -t $loggertitle "> $takecmd"
 eval $takecmd
 
 if [ $? -eq 0 ]; then
-    jq -rc "$jq_query1" < $outraw > $out
-else
-    logger -t $loggertitle "[ERR] CURL exit code $?. Will use $out from previous run."
+    jq -rc "$jq_query1" $outraw > $outtmp
+    if [ $? -eq 0 ]; then
+        mv -f $outtmp $out
+        logger -t $loggertitle "[OK] Fresh weather data taken."
+    else
+        logger -t $loggertitle "[ERR] Error occured processing $outraw"
+    fi
 fi
 
 logger -t $loggertitle < $out
