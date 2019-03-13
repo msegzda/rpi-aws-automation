@@ -26,11 +26,11 @@ This solution is not complete. Its not world tested, in many areas not working a
 
 ## Anonymous FTP ##
 
-vsftpd is installed with (above mentioned) prerequisites for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only. Its configured with single [/etc/vsftpd.conf](/msegzda/rpi-aws-automation/blob/master/etc/vsftpd.conf) file. 
+vsftpd is installed with (above mentioned) prerequisites for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only. Its configured with single [/etc/vsftpd.conf](/etc/vsftpd.conf) file. 
 
 ## How to setup RPI with SSM ##
 
- 1. Upload all /var and /etc/scripts from local repo into corresponding folder on RPI
+ 1. Upload all of `/var` and `/etc` from local repo into corresponding folders on RPI
  1. Install SSM agent using [this AWS tutorial](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html#agent-install-raspbianjessie)
  Note: use `SSMServiceRole` role from already created list when creating activation request.
  1. Execute `/etc/scripts/setup-rpi` to configure AWSCLI, AWSLOGS and rest of settings
