@@ -14,6 +14,10 @@ if [ ! -d $maindir ]; then
     chmod -v 777 $maindir
 fi
 
+if [ -z "$aws_r53zoneid" ]; then
+    echo "Configuration file does not have aws.r53zoneid set. Nothing to do."
+fi
+
 privateIP=$(hostname -I | xargs) # xargs there "trims" the returned string
 publicIP=$(curl -s --max-time 5 http://ipecho.net/plain || curl -s --max-time 5 https://api.ipify.org/ | xargs)
 publicIP_previous=$(cat $maindir/ip.json | jq -r ".pub")
@@ -29,6 +33,7 @@ if [ ! -z "$privateIP" ] && [ ! -z "$publicIP" ]; then
             | awk '{print}' ORS='' | logger -t $loggertitle
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
             logger -t $loggertitle "[ERR] Could not set public IP address on $2! AWS Route53 exit code: $?"
+            # TODO: try once more 1 minute later
         else
             echo "{\"pri\":\"${privateIP}\",\"pub\":\"${publicIP}\"}" > $maindir/ip.json
             cat $maindir/ip.json | logger -t $loggertitle "$maindir/ip.json"

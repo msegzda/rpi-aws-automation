@@ -64,7 +64,12 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
         if [ ! -e /tmp/$CAM.rebooted ]; then
             rebootcmd=$(jq -r .$CAM.rebootcmd <<< $CONFIG)
             logger -t $loggertitle "> $rebootcmd"
-            eval $rebootcmd 2>&1 | awk '{print}' ORS='' | logger -t $loggertitle
+            eval $rebootcmd | jq -rc ".[0]" | logger -t $loggertitle
+            # try once more if needed
+            if [ ${PIPESTATUS[1]} -ne 0 ]; then
+                sleep 10s
+                eval $rebootcmd | jq -rc ".[0]" | logger -t $loggertitle
+            fi
             touch /tmp/$CAM.rebooted
         else
             logger -t $loggertitle "[WARN] $CAM was rebooted lately, not sending another command."
@@ -81,6 +86,9 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
     annotateformat=$(printf "$annotateformat" "$temp" "$CAM")
     annotatecmd=$(jq -r .$CAM.annotatecmd <<< $CONFIG)
     annotatecmd=$(printf "$annotatecmd" "/tmp/$CAM-$FILENAME-1.jpg" "$annotateformat" "/tmp/$CAM-$FILENAME-2.jpg")
+    #TODO: TZ=Europe/Vilnius date --iso-8601=seconds
+    #2019-03-13T19:32:57+02:00 annotate with date in this format
+
     logger -t $loggertitle "> $annotatecmd"
     eval $annotatecmd 2>&1 | logger -t $loggertitle
 

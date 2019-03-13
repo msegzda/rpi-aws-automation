@@ -9,7 +9,8 @@ cpu_temp=$(</sys/class/thermal/thermal_zone0/temp)
 cpu_temp=$(($cpu_temp/1000))
 
 load_averages=$(ionice -c2 -n7 cut -d' ' -f-3 /proc/loadavg|sed -e "s/ /,/g")
+disk_used_percent=$(ionice -c2 -n7 df / | awk '{print $5}' | cut -d '%' -f 1 | tail -n 1)
 
-out="{\"host\":\"$HOSTNAME\",\"cpu_temp\":$cpu_temp,\"load_averages\":[$load_averages]}"
+out="{\"host\":\"$HOSTNAME\",\"cpu_temp\":$cpu_temp,\"load_averages\":[$load_averages],\"disk_used_percent\":$disk_used_percent}"
 echo "$out"
 echo "$out" | logger -t $loggertitle
