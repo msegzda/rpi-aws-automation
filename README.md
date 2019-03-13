@@ -1,6 +1,6 @@
 # Friendly disclaimer #
 
-This solution is not complete. Its not world tested, in many areas not working as expected and is generally not stable. By using scripts from this repo you are risking to screw up the RPI configuration and loosing ALL data.
+This solution is not complete. Its not world tested, in many areas not working as expected and is generally not stable. By using scripts from this repo you are risking to screw up your RPI configuration and/or loosing ALL data. Make sure you done proper backups and verified them before using any of the scripts or instructions provided. You have been warned :)
 
 ## Image installation ##
 
@@ -26,7 +26,7 @@ This solution is not complete. Its not world tested, in many areas not working a
 
 ## Anonymous FTP ##
 
- 1. vsftpd is installed for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only.
+vsftpd is installed with (above mentioned) prerequisites for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only. Its configured with single [/etc/vsftpd.conf](/msegzda/rpi-aws-automation/blob/master/etc/vsftpd.conf) file. 
 
 ## How to setup RPI with SSM ##
 
