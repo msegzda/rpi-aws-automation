@@ -55,6 +55,7 @@ fi
 find /tmp -mtime +1 -type f -name "*.retry" -exec rm -vf {} \; | logger -t $loggertitle
 find /tmp -mmin +59 -type f -name "*.rebooted" -exec rm -vf {} \; | logger -t $loggertitle
 find /tmp -mmin +59 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
+find /tmp -mmin +59 -type f -name "*.conf" -exec rm -vf {} \; | logger -t $loggertitle
 
 # delete old *.jpg files
 find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
@@ -68,3 +69,10 @@ find $ftpdir -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
 find $maindir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $wwwhtml -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $ftpdir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
+
+# configure incron directories
+find $ftpdir -mindepth 2 -type d -print0 |
+while IFS= read -r -d $'\0' line; do
+    echo "$line IN_CLOSE_WRITE /etc/scripts/incron-do \$% \$@ \$#" >> /tmp/track-these-dirs.conf
+done
+mv -fv /tmp/track-these-dirs.conf /etc/incron.d/ | logger -t $loggertitle

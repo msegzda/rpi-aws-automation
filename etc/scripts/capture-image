@@ -15,6 +15,12 @@ CAM=${1,,} # always lower case ($1 param)
 CONFIG=$(cat /etc/rpi.json)
 maindir=$(jq -r .maindir <<< $CONFIG)
 TMPLOCAL="$maindir/$CAM/$DATEDIR"
+
+if [ ! -z "$(find $TMPLOCAL -mmin -1 -type f -name *.jpg | head -n 1)" ]; then
+    echo "Image is already captured in the last minute"
+    exit
+fi
+
 wwwhtml="/var/www/html"
 htmlcurrent="$wwwhtml/$CAM/current"
 SUNFILE=$(cat $maindir/sunrise-sunset-today.json)
@@ -59,16 +65,17 @@ if [ $NOW -ge $sunrse ] && [ $NOW -le $sunset ]; then
 
     # If file is not JPEG reboot the cam with $rebootcmd
     if [[ ${PIPESTATUS[0]} -ne 0 ]] || [[ ! $(file -b "/tmp/$CAM-$FILENAME-1.jpg") =~ JPEG ]]; then
-        logger -t $loggertitle "[ERR] $CAM failed to provide JPEG"
+        logger -t $loggertitle "[ERR] $CAM failed to provide valid JPEG"
+        cat /tmp/$CAM-$FILENAME-1.jpg | tail -n 20 | logger -t $loggertitle
         # reboot of cam cannot happen frequently
         if [ ! -e /tmp/$CAM.rebooted ]; then
             rebootcmd=$(jq -r .$CAM.rebootcmd <<< $CONFIG)
             logger -t $loggertitle "> $rebootcmd"
-            eval $rebootcmd | jq -rc ".[0]" | logger -t $loggertitle
+            eval $rebootcmd | jq -rc ".[0]" 2>&1 | logger -t $loggertitle
             # try once more if needed
             if [ ${PIPESTATUS[1]} -ne 0 ]; then
                 sleep 10s
-                eval $rebootcmd | jq -rc ".[0]" | logger -t $loggertitle
+                eval $rebootcmd | jq -rc ".[0]" 2>&1 | logger -t $loggertitle
             fi
             touch /tmp/$CAM.rebooted
         else

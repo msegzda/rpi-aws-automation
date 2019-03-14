@@ -1,0 +1,36 @@
+#!/bin/bash
+
+loggertitle="$(basename ${0})[$$]"
+
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+    echo "Missing parameters."
+    exit
+fi
+
+incronact=$1
+dirfrom=$2
+file=$3
+CAM=$(cut -d'_' -f 1 <<< "$file") # takes CAM1 from CAM1_01_20190314062013.jpg
+CAM=${CAM,,} # lowercase: CAM1 -> cam1
+fileRenamed=$(cut -d'_' -f 3 <<< "$file") # takes 20190314062013.jpg from CAM1_01_20190314062013.jpg
+
+if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
+    CONFIG=$(cat /etc/rpi.json)
+    maindir=$(jq -r .maindir <<< $CONFIG)
+    DATEDIR=`date +%Y/%m/%d`
+    TMPLOCAL="$maindir/$CAM/$DATEDIR"
+    RETRYDATE=`date +%Y%m%d`
+    s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
+    mv -fv "$dirfrom/$file" "$TMPLOCAL/$fileRenamed" | logger -t $loggertitle
+
+    awscp="aws s3 cp $TMPLOCAL/$fileRenamed $s3bucket/$DATEDIR/ --acl public-read"
+    eval $awscp 2>&1 | logger -t $loggertitle
+
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        logger -t $loggertitle "[ERR] AWSCLI failed. Exit code: ${PIPESTATUS[0]}"
+        echo "$awscp" >> $maindir/aws-s3-cp-$RETRYDATE.retry
+        logger -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
+    fi
+else
+    logger -t $loggertitle "[ERR] Invalid $dirfrom/$file file. Ignoring."
+fi
