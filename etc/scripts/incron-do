@@ -21,7 +21,22 @@ if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
     TMPLOCAL="$maindir/$CAM/$DATEDIR"
     RETRYDATE=`date +%Y%m%d`
     s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
-    mv -fv "$dirfrom/$file" "$TMPLOCAL/$fileRenamed" | logger -t $loggertitle
+    sleep 2s
+    cmdmv="mv -fv $dirfrom/$file $TMPLOCAL/$fileRenamed"
+    eval $cmdmv 2>&1 | logger -t $loggertitle
+
+    # did file move? If no - retry!
+    if [ -f "$dirfrom/$file" ]; then
+        logger -t $loggertitle "[WARN] Failed to move $dirfrom/$file file. Retry!"
+        sleep 2s
+        eval $cmdmv 2>&1 | logger -t $loggertitle
+        sleep 1s
+    fi
+    # if still not moved
+    if [ -f "$dirfrom/$file" ]; then
+        logger -t $loggertitle "[ERR] > $cmdmv"
+        exit
+    fi
 
     awscp="aws s3 cp $TMPLOCAL/$fileRenamed $s3bucket/$DATEDIR/ --acl public-read"
     eval $awscp 2>&1 | logger -t $loggertitle

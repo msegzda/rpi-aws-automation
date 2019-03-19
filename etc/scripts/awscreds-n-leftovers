@@ -9,8 +9,9 @@ if [ $(pgrep -f ${0} | wc -l) -gt 2 ]; then
     exit
 fi
 
-rm -fv /root/.aws/credentials | logger -t $loggertitle
+rm -f /root/.aws/credentials
 service amazon-ssm-agent restart
+sleep 10s
 service awslogs restart
 logger -t $loggertitle "Reloaded amazon-ssm-agent and awslogs"
 
@@ -38,9 +39,19 @@ fi
 # move to S3 only in the hours from 1 to 5 AM
 if [ $HOUR -ge 1 ] && [ $HOUR -lt 5 ] && [ -d $maindir/dailytimelapses ]; then
 
-    find $maindir/dailytimelapses -type f -name "*.mp4" -exec \
-        aws s3 mv {} $s3bucket/dailytimelapses/ --acl public-read --only-show-errors \; \
-        2>&1 | logger -t $loggertitle
+    find $maindir/dailytimelapses -type f -name "*.mp4" -print0 |
+    while IFS= read -r -d $'\0' mp4; do
+        # reference: https://github.com/tokland/youtube-upload
+        #if [ -f /etc/youtube_client_secrets.json ]; then
+        #    youtube-upload $mp4 \
+        #        --title="Daily timelapse $(basename $mp4)" \
+        #        --privacy="unlisted" \
+        #        --client-secrets=/etc/youtube_client_secrets.json \
+        #        --playlist="Timelapses-daily"
+        #fi
+        aws s3 mv $mp4 $s3bucket/dailytimelapses/ --acl public-read --only-show-errors \
+            2>&1 | logger -t $loggertitle
+    done
 
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
         logger -t $loggertitle "[ERR] AWSCLI error code: ${PIPESTATUS[0]}"
@@ -62,17 +73,21 @@ find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $l
 # delete old timelapses
 find $maindir -mtime +20 -type f -name "*.mp4" -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old temporary files
-find $maindir -mtime +10 -type f -name "awscli-n-logs-updated.tmp" -exec rm -vf {} \; | logger -t $loggertitle
+find $maindir -maxdepth 1 -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old files from ftp dir
-find $ftpdir -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
+find $ftpdir -mtime +5 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # delete empty dirs
 find $maindir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $wwwhtml -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $ftpdir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 
-# configure incron directories
+# scan and configure directories for incron
 find $ftpdir -mindepth 2 -type d -print0 |
 while IFS= read -r -d $'\0' line; do
     echo "$line IN_CLOSE_WRITE /etc/scripts/incron-do \$% \$@ \$#" >> /tmp/track-these-dirs.conf
 done
-mv -fv /tmp/track-these-dirs.conf /etc/incron.d/ | logger -t $loggertitle
+if [[ $(cmp --silent /tmp/track-these-dirs.conf /etc/incron.d/track-these-dirs.conf; echo $?) -ne 0 ]]; then
+    mv -fv /tmp/track-these-dirs.conf /etc/incron.d/ | logger -t $loggertitle "New dirs found. Updating: "
+else
+    rm -f /tmp/track-these-dirs.conf
+fi
