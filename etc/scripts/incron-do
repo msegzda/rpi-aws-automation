@@ -12,7 +12,6 @@ dirfrom=$2
 file=$3
 CAM=$(cut -d'_' -f 1 <<< "$file") # takes CAM1 from CAM1_01_20190314062013.jpg
 CAM=${CAM,,} # lowercase: CAM1 -> cam1
-fileRenamed=$(cut -d'_' -f 3 <<< "$file") # takes 20190314062013.jpg from CAM1_01_20190314062013.jpg
 
 if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
     CONFIG=$(cat /etc/rpi.json)
@@ -21,8 +20,9 @@ if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
     TMPLOCAL="$maindir/$CAM/$DATEDIR"
     RETRYDATE=`date +%Y%m%d`
     s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
+    FILENAME=$(date +%Y%m%d%H%M%S)".jpg"
     sleep 2s
-    cmdmv="mv -fv $dirfrom/$file $TMPLOCAL/$fileRenamed"
+    cmdmv="mv -fv $dirfrom/$file $TMPLOCAL/$FILENAME"
     eval $cmdmv 2>&1 | logger -t $loggertitle
 
     # did file move? If no - retry!
@@ -38,7 +38,7 @@ if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
         exit
     fi
 
-    awscp="aws s3 cp $TMPLOCAL/$fileRenamed $s3bucket/$DATEDIR/ --acl public-read"
+    awscp="aws s3 cp $TMPLOCAL/$FILENAME $s3bucket/$DATEDIR/ --acl public-read"
     eval $awscp 2>&1 | logger -t $loggertitle
 
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
