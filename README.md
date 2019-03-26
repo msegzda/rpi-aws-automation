@@ -21,12 +21,12 @@ This solution is not complete. Its not world tested, in many areas not working a
  1. SSH to server and install the following prerequisites:
 
     ``` bash
-    apt-get install -y --upgrade ffmpeg screen vsftpd ftp jq dnsutils imagemagick nginx
+    apt-get install -y --upgrade ffmpeg screen vsftpd ftp jq dnsutils imagemagick nginx sqlite3
     ```
 
 ## Anonymous FTP ##
 
-vsftpd is installed with (above mentioned) prerequisites for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only. Its configured with single [/etc/vsftpd.conf](/etc/vsftpd.conf) file. 
+vsftpd is installed with (above mentioned) prerequisites for cameras to push captured motion videos. vsftpd is configured on anonymous-only mode. Note FTP works on private network only. Its configured with single [/etc/vsftpd.conf](/etc/vsftpd.conf) file.
 
 ## How to setup RPI with SSM ##
 
