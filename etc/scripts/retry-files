@@ -36,5 +36,3 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
     logger -t $loggertitle "This was retry attempt #$retryCount"
     sqlite3 everything.db "INSERT INTO retried (cmd) VALUES ('$line');"
 done < "/tmp/$retryfilename"
-
-sqlite3 everything.db "DELETE FROM retried WHERE INSERT_DATE < datetime('now','-2 days');"

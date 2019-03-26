@@ -52,6 +52,11 @@ if [ ! -d $TMPLOCAL ]; then
     chmod -v 777 $TMPLOCAL
 fi
 
+if [ ! -d $htmlcurrent ]; then
+    mkdir -v -p $htmlcurrent
+    chmod -v 777 $htmlcurrent
+fi
+
 sleep 2s
 cmdmv="mv -fv $dirfrom/$file /tmp/$CAM-$FILENAME-1.jpg"
 eval $cmdmv 2>&1 | logger -t $loggertitle
@@ -91,6 +96,10 @@ else
 fi
 # remove residual tmp files
 rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -t $loggertitle
+
+# write into last captures table
+sqlite3 everything.db "CREATE TABLE IF NOT EXISTS captures(ID INTEGER PRIMARY KEY AUTOINCREMENT, cam TEXT, img TEXT, INSERT_DATE DATETIME DEFAULT CURRENT_TIMESTAMP);"
+sqlite3 everything.db "INSERT INTO captures (cam,img) VALUES ('$CAM','$s3public/$DATEDIR/$FILENAME.jpg');"
 
 awscp="aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read"
 eval $awscp 2>&1 | logger -t $loggertitle
