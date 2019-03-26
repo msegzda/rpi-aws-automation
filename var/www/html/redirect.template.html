@@ -1,6 +1,25 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta http-equiv="Refresh" content="0; url=%s" />
-  </head>
+<html lang="en">
+    <head>
+        <title>Latest image</title>
+        <meta http-equiv="Refresh" content="60; url=./" />
+        <style>
+        .camera-image {
+            background-image: url("%s");
+            height: 100%;
+
+            /* Center and scale the image nicely */
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+        body, html {
+            height: 100%;
+            margin: 0;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="camera-image"></div>
+    </body>
 </html>
