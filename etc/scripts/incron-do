@@ -7,45 +7,101 @@ if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
     exit
 fi
 
-incronact=$1
+incronAction=$1
 dirfrom=$2
 file=$3
 CAM=$(cut -d'_' -f 1 <<< "$file") # takes CAM1 from CAM1_01_20190314062013.jpg
 CAM=${CAM,,} # lowercase: CAM1 -> cam1
 
-if [[ $CAM =~ ^cam[0-9]$ ]] && [[ $(file -b "$dirfrom/$file") =~ JPEG ]]; then
-    CONFIG=$(cat /etc/rpi.json)
-    maindir=$(jq -r .maindir <<< $CONFIG)
-    DATEDIR=`date +%Y/%m/%d`
-    TMPLOCAL="$maindir/$CAM/$DATEDIR"
-    RETRYDATE=`date +%Y%m%d`
-    s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
-    FILENAME=$(date +%Y%m%d%H%M%S)".jpg"
-    sleep 2s
-    cmdmv="mv -fv $dirfrom/$file $TMPLOCAL/$FILENAME"
-    eval $cmdmv 2>&1 | logger -t $loggertitle
-
-    # did file move? If no - retry!
-    if [ -f "$dirfrom/$file" ]; then
-        logger -t $loggertitle "[WARN] Failed to move $dirfrom/$file file. Retry!"
-        sleep 2s
-        eval $cmdmv 2>&1 | logger -t $loggertitle
-        sleep 1s
-    fi
-    # if still not moved
-    if [ -f "$dirfrom/$file" ]; then
-        logger -t $loggertitle "[ERR] > $cmdmv"
-        exit
-    fi
-
-    awscp="aws s3 cp $TMPLOCAL/$FILENAME $s3bucket/$DATEDIR/ --acl public-read"
-    eval $awscp 2>&1 | logger -t $loggertitle
-
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        logger -t $loggertitle "[ERR] AWSCLI failed. Exit code: ${PIPESTATUS[0]}"
-        echo "$awscp" >> $maindir/aws-s3-cp-$RETRYDATE.retry
-        logger -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
-    fi
-else
+if [[ ! $CAM =~ ^cam[0-9]$ ]] || [[ ! $(file -b "$dirfrom/$file") =~ JPEG ]]; then
     logger -t $loggertitle "[ERR] Invalid $dirfrom/$file file. Ignoring."
+    exit 1
+fi
+
+CONFIG=$(cat /etc/rpi.json)
+maindir=$(jq -r .maindir <<< $CONFIG)
+DATEDIR=`date +%Y/%m/%d`
+TMPLOCAL="$maindir/$CAM/$DATEDIR"
+RETRYDATE=`date +%Y%m%d`
+
+s3bucket="s3://"$(jq -r .aws.s3 <<< $CONFIG)"/$CAM"
+s3public=$(jq -r .aws.s3pub <<< $CONFIG)"/$CAM"
+
+FILENAME=`date +%Y%m%d%H%M%S`
+wwwhtml="/var/www/html"
+htmlcurrent="$wwwhtml/$CAM/current"
+SUNFILE=$(cat $maindir/sunrise-sunset-today.json)
+setoffset=$(jq -r .sun.setoffset <<< $CONFIG)
+riseoffset=$(jq -r .sun.riseoffset <<< $CONFIG)
+jq_temp=$(jq -r .weather.jq_temp <<< $CONFIG)
+jq_wind=$(jq -r .weather.jq_wind <<< $CONFIG)
+
+# in the night do not capture
+# below compares numbers in HHmmss format
+sunrse=`date +"%H%M%S" --date="$(jq -r .results.sunrise <<< $SUNFILE) $riseoffset"`
+sunset=`date +"%H%M%S" --date="$(jq -r .results.sunset <<< $SUNFILE) $setoffset"`
+NOW=$(date +"%H%M%S")
+
+if [ $sunrse -ge $NOW ] || [ $sunset -le $NOW ]; then
+    echo "Not doing anything in the night"
+    exit 2
+fi
+
+if [ ! -d $TMPLOCAL ]; then
+    mkdir -v -p $TMPLOCAL
+    chmod -v 777 $TMPLOCAL
+fi
+
+sleep 2s
+cmdmv="mv -fv $dirfrom/$file /tmp/$CAM-$FILENAME-1.jpg"
+eval $cmdmv 2>&1 | logger -t $loggertitle
+
+# did file move? If no - retry!
+if [ -f "$dirfrom/$file" ]; then
+    logger -t $loggertitle "[WARN] Failed to move $dirfrom/$file file. Retry!"
+    sleep 2s
+    eval $cmdmv 2>&1 | logger -t $loggertitle
+    sleep 1s
+fi
+# if still not moved
+if [ -f "$dirfrom/$file" ]; then
+    logger -t $loggertitle "[ERR] > $cmdmv"
+    exit
+fi
+
+# now annotate with temperature
+temp=$(jq -rc "$jq_temp" < $maindir/weather.json)
+wind=$(jq -rc "$jq_wind" < $maindir/weather.json)
+camname=$(jq -r .$CAM.name <<< $CONFIG)
+annotateformat=$(jq -r .$CAM.annotateformat <<< $CONFIG)
+annotateformat=$(printf "$annotateformat" "$temp" "$CAM")
+annotatecmd=$(jq -r .$CAM.annotatecmd <<< $CONFIG)
+annotatecmd=$(printf "$annotatecmd" "/tmp/$CAM-$FILENAME-1.jpg" "$annotateformat" "/tmp/$CAM-$FILENAME-2.jpg")
+#TODO: TZ=Europe/Vilnius date --iso-8601=seconds
+#2019-03-13T19:32:57+02:00 annotate with date in this format
+
+logger -t $loggertitle "> $annotatecmd"
+eval $annotatecmd 2>&1 | logger -t $loggertitle
+
+if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    # place annotated image into correct place
+    mv -fv /tmp/$CAM-$FILENAME-2.jpg $TMPLOCAL/$FILENAME.jpg | logger -t $loggertitle
+else
+    logger -t $loggertitle "[WARN] Annotation failed. IM convert exit code: ${PIPESTATUS[0]}"
+fi
+# remove residual tmp files
+rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -t $loggertitle
+
+awscp="aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read"
+eval $awscp 2>&1 | logger -t $loggertitle
+
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    logger -t $loggertitle "[ERR] AWSCLI failed. Exit code: ${PIPESTATUS[0]}"
+    echo "$awscp" >> $maindir/aws-s3-cp-$RETRYDATE.retry
+    logger -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
+else
+    redirto=$(sed "s/\//\\\\\//g" <<< "$s3public/$DATEDIR/$FILENAME.jpg")
+    sedcmd="sed \"s/%s/${redirto}/g\" $wwwhtml/redirect.template.html > $htmlcurrent/index.html"
+    logger -t $loggertitle "> $sedcmd"
+    eval $sedcmd
 fi

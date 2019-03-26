@@ -69,13 +69,13 @@ find /tmp -mmin +59 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $logger
 find /tmp -mmin +59 -type f -name "*.conf" -exec rm -vf {} \; | logger -t $loggertitle
 
 # delete old *.jpg files
-find $maindir -mtime +10 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
+find $maindir -mtime +5 -type f -name "*.jpg" -exec rm -vf {} \; | logger -t $loggertitle
 # delete old timelapses
-find $maindir -mtime +20 -type f -name "*.mp4" -exec rm -vf {} \; | logger -t $loggertitle
+find $maindir -mtime +5 -type f -name "*.mp4" -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old temporary files
 find $maindir -maxdepth 1 -mtime +10 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # wipe old files from ftp dir
-find $ftpdir -mtime +5 -type f -exec rm -vf {} \; | logger -t $loggertitle
+find $ftpdir -mtime +14 -type f -exec rm -vf {} \; | logger -t $loggertitle
 # delete empty dirs
 find $maindir -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
 find $wwwhtml -mindepth 1 -mtime +1 -type d -empty -exec rm -vrf {} \; | logger -t $loggertitle
@@ -87,7 +87,7 @@ while IFS= read -r -d $'\0' line; do
     echo "$line IN_CLOSE_WRITE /etc/scripts/incron-do \$% \$@ \$#" >> /tmp/track-these-dirs.conf
 done
 if [[ $(cmp --silent /tmp/track-these-dirs.conf /etc/incron.d/track-these-dirs.conf; echo $?) -ne 0 ]]; then
-    mv -fv /tmp/track-these-dirs.conf /etc/incron.d/ | logger -t $loggertitle "New dirs found. Updating: "
+    logger -t $loggertitle "New dirs found. Update: $(mv -fv /tmp/track-these-dirs.conf /etc/incron.d/)"
 else
     rm -f /tmp/track-these-dirs.conf
 fi
