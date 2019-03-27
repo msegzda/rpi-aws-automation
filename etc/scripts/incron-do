@@ -57,6 +57,10 @@ if [ ! -d $htmlcurrent ]; then
     chmod -v 777 $htmlcurrent
 fi
 
+if [[ ! -f $htmlcurrent/index.html ]] || [[ $(cmp --silent $wwwhtml/index.template.html $htmlcurrent/index.html; echo $?) -ne 0 ]]; then
+    cp -fv $wwwhtml/index.template.html $htmlcurrent/index.html | logger -t $loggertitle
+fi
+
 sleep 2s
 cmdmv="mv -fv $dirfrom/$file /tmp/$CAM-$FILENAME-1.jpg"
 eval $cmdmv 2>&1 | logger -t $loggertitle
@@ -98,8 +102,8 @@ fi
 rm -fv /tmp/$CAM-$FILENAME-*.jpg | logger -t $loggertitle
 
 # write into last captures table
-sqlite3 everything.db "CREATE TABLE IF NOT EXISTS captures(ID INTEGER PRIMARY KEY AUTOINCREMENT, cam TEXT, img TEXT, INSERT_DATE DATETIME DEFAULT CURRENT_TIMESTAMP);"
-sqlite3 everything.db "INSERT INTO captures (cam,img) VALUES ('$CAM','$s3public/$DATEDIR/$FILENAME.jpg');"
+sqlite3 everything.db "CREATE TABLE IF NOT EXISTS captures(ID INTEGER PRIMARY KEY AUTOINCREMENT, cam TEXT, src TEXT, INSERT_DATE DATETIME DEFAULT CURRENT_TIMESTAMP);"
+sqlite3 everything.db "INSERT INTO captures (cam,src) VALUES ('$CAM','$s3public/$DATEDIR/$FILENAME.jpg');"
 
 awscp="aws s3 cp $TMPLOCAL/$FILENAME.jpg $s3bucket/$DATEDIR/ --acl public-read"
 eval $awscp 2>&1 | logger -t $loggertitle
@@ -108,12 +112,7 @@ if [ ${PIPESTATUS[0]} -ne 0 ]; then
     logger -t $loggertitle "[ERR] AWSCLI failed. Exit code: ${PIPESTATUS[0]}"
     echo "$awscp" >> $maindir/aws-s3-cp-$RETRYDATE.retry
     logger -t $loggertitle "[WARN] $maindir/aws-s3-cp-$RETRYDATE.retry file written"
-else
-    redirto=$(sed "s/\//\\\\\//g" <<< "$s3public/$DATEDIR/$FILENAME.jpg")
-    sedcmd="sed \"s/%s/${redirto}/g\" $wwwhtml/redirect.template.html > $htmlcurrent/index.html"
-    logger -t $loggertitle "> $sedcmd"
-    eval $sedcmd
 fi
 
 # write into manifest file
-sqlite3 -csv -header everything.db "SELECT ID,img,INSERT_DATE FROM captures ORDER BY ID DESC LIMIT 20;" > $htmlcurrent/gallery.csv
+sqlite3 -csv -header everything.db "SELECT ID AS pid,src,'2560' as w,'1440' as h FROM captures ORDER BY ID DESC LIMIT 20;" > $htmlcurrent/gallery.csv
