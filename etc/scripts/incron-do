@@ -114,3 +114,6 @@ else
     logger -t $loggertitle "> $sedcmd"
     eval $sedcmd
 fi
+
+# write into manifest file
+sqlite3 -csv -header everything.db "SELECT ID,img,INSERT_DATE FROM captures ORDER BY ID DESC LIMIT 20;" > $htmlcurrent/gallery.csv
