@@ -93,5 +93,5 @@ else
 fi
 
 # old data from tables cleanup
-sqlite3 everything.db "DELETE FROM retried WHERE INSERT_DATE < datetime('now','-2 days');"
-sqlite3 everything.db "DELETE FROM captures WHERE INSERT_DATE < datetime('now','-2 days');"
+sqlite3 $maindir/sqlite.db "DELETE FROM retried WHERE INSERT_DATE < datetime('now','-2 days');"
+sqlite3 $maindir/sqlite.db "DELETE FROM captures WHERE INSERT_DATE < datetime('now','-2 days');"
