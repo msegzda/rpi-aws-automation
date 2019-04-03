@@ -79,8 +79,8 @@ if [ -f "$dirfrom/$file" ]; then
 fi
 
 # check if not corrupted
-identify -ping /tmp/$CAM-$FILENAME-1.jpg | logger -t $loggertitle
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
+identify -regard-warnings /tmp/$CAM-$FILENAME-1.jpg 2>&1 | logger -t $loggertitle
+if [ $? -ne 0 ]; then
     logger -t $loggertitle "[ERR] Image /tmp/$CAM-$FILENAME-1.jpg is corrupted or not complete"
     rm -fv /tmp/$CAM-$FILENAME-1.jpg
     exit
